@@ -1,0 +1,2 @@
+add_subdirectory(TaskSystem)
+add_subdirectory(TaskSystem.UnitTests)

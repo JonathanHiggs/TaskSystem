@@ -1,0 +1,169 @@
+{
+    "version": 2,
+    "configurePresets": [
+        {
+            "name": "linux-default",
+            "displayName": "Linux Debug",
+            "description": "Target the Windows Subsystem for Linux (WSL) or a remote Linux system.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                }
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": { "hostOS": [ "Linux" ] },
+                "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": { "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}" }
+            }
+        },
+        {
+            "name": "macos-default",
+            "displayName": "macOS Debug",
+            "description": "Target a remote macOS system with Ninja",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                }
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": { "hostOS": [ "macOS" ] },
+                "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": { "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}" }
+            }
+        },
+        {
+            "name": "windows-clang-base",
+            "hidden": true,
+            "displayName": "Windows Clang x64 Base",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/clang-cl.exe",
+                "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/clang-cl.exe",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                }
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [ "Windows" ],
+                    "intelliSenseMode": "windows-clang-x64"
+                }
+            }
+        },
+        {
+            "name": "windows-clang-debug",
+            "inherits": "windows-clang-base",
+            "displayName": "Windows Clang x64 Debug",
+            "description": "Windows Clang x64 Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-clang-release-pdb",
+            "inherits": "windows-clang-base",
+            "displayName": "Windows Clang x64 Release Pdb",
+            "description": "Windows Clang x64 Release Pdb",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "windows-clang-release",
+            "inherits": "windows-clang-base",
+            "displayName": "Windows Clang x64 Release",
+            "description": "Windows Clang x64 Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "win-x64",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                }
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [ "Windows" ],
+                    "intelliSenseMode": "windows-msvc-x64"
+                }
+            }
+        },
+        {
+            "name": "win-x64-debug",
+            "inherits": "win-x64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "win-x64-release",
+            "inherits": "win-x64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "win-x64-ninja",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Debug;RelWithDebInfo;Release",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                }
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [ "Windows" ],
+                    "intelliSenseMode": "windows-msvc-x64"
+                }
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "win-x64-ninja-debug",
+            "configurePreset": "win-x64-ninja",
+            "configuration": "Debug"
+        },
+        {
+            "name": "win-x64-ninja-release-pdb",
+            "configurePreset": "win-x64-ninja",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "win-x64-ninja-release",
+            "configurePreset": "win-x64-ninja",
+            "configuration": "Release"
+        }
+    ]
+}
