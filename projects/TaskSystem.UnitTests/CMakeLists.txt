@@ -25,7 +25,7 @@ target_compile_options(tasksystem_unittests PRIVATE
 )
 
 target_include_directories(tasksystem_unittests PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/test"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
 target_link_libraries(tasksystem_unittests PRIVATE

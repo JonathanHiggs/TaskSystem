@@ -119,6 +119,13 @@
             }
         },
         {
+            "name": "win-x64-release-pdb",
+            "inherits": "win-x64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
             "name": "win-x64-release",
             "inherits": "win-x64",
             "cacheVariables": {

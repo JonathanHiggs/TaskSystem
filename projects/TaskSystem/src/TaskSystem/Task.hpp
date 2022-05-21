@@ -112,8 +112,7 @@ namespace TaskSystem
             template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
             void return_value(TValue && value) noexcept(std::is_nothrow_constructible_v<TResult, TValue &&>)
             {
-                // ToDo: should move into the result?
-                result = States::Completed<TResult>{ value };
+                result = States::Completed<TResult>{ std::forward<TValue>(value) };
             }
 
             TResult & Result() &
@@ -225,7 +224,7 @@ namespace TaskSystem
     }  // namespace Detail
 
     template <typename TResult = void>
-    class [[nodiscard]] Task
+    class [[nodiscard]] Task final
     {
     public:
         using value_type = TResult;
@@ -295,9 +294,15 @@ namespace TaskSystem
             }
         }
 
+        template <typename TFunc, typename T = std::invoke_result_t<TFunc>>
+        static Task<T> From(TFunc && fn)
+        {
+            co_return std::forward<TFunc>(fn)();
+        }
+
         auto operator co_await() const & noexcept
         {
-            struct Awaitable : AwaitableBase
+            struct Awaitable final : AwaitableBase
             {
                 using AwaitableBase::AwaitableBase;
 
@@ -318,7 +323,7 @@ namespace TaskSystem
 
         auto operator co_await() const && noexcept
         {
-            struct Awaitable : AwaitableBase
+            struct Awaitable final : AwaitableBase
             {
                 using AwaitableBase::AwaitableBase;
 
@@ -342,10 +347,11 @@ namespace TaskSystem
             return !handle || handle.done();
         }
 
-        // Maybe: might not want to keep this
-        TResult Run()
+        template <typename TValue = TResult, std::enable_if_t<!std::is_void_v<TValue>> * = nullptr>
+        TValue Run() &
         {
-            if (!handle || handle.done()) {
+            if (!handle || handle.done())
+            {
                 // ToDo: better exception
                 throw std::exception("Nope");
             }
@@ -354,12 +360,53 @@ namespace TaskSystem
 
             return handle.promise().Result();
         }
+
+        template <typename TValue = TResult, std::enable_if_t<std::is_void_v<TValue>> * = nullptr>
+        void Run() &
+        {
+            if (!handle || handle.done())
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            handle.resume();
+        }
+
+        template <typename TValue = TResult, std::enable_if_t<!std::is_void_v<TValue>> * = nullptr>
+        TValue && Run() &&
+        {
+            if (!handle || handle.done())
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            handle.resume();
+
+            if constexpr (!std::is_void_v<TValue>)
+            {
+                return std::move(handle.promise()).Result();
+            }
+        }
+
+        template <typename TValue = TResult, std::enable_if_t<std::is_void_v<TValue>> * = nullptr>
+        void Run() &&
+        {
+            if (!handle || handle.done())
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            handle.resume();
+        }
     };
 
     namespace Detail
     {
 
-        template<typename TResult>
+        template <typename TResult>
         Task<TResult> TaskPromise<TResult>::get_return_object() noexcept
         {
             using handle_type = std::coroutine_handle<TaskPromise>;
@@ -379,6 +426,6 @@ namespace TaskSystem
             return Task<TResult &>(handle_type::from_promise(*this));
         }
 
-    }
+    }  // namespace Detail
 
 }  // namespace TaskSystem
