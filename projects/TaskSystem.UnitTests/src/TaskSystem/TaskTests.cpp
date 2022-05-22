@@ -4,12 +4,29 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
+#include <atomic>
+#include <thread>
+
 
 using TaskSystem::Utils::Tracked;
 
 
 namespace TaskSystem::Tests
 {
+    namespace
+    {
+        Task<> EmptyTask()
+        {
+            co_return;
+        }
+
+        template <typename T>
+        Task<T> CopyResult(T const & value)
+        {
+            co_return value;
+        }
+    }  // namespace
 
     TEST(TaskTests, taskFromLambdaReturnVoid)
     {
@@ -41,38 +58,38 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-     TEST(TaskTests, taskLambdaReturnVoid)
-     {
-         // Arrange
-         bool started = false;
+    TEST(TaskTests, taskLambdaReturnVoid)
+    {
+        // Arrange
+        bool started = false;
 
-         auto task = [&]() -> Task<> {
-             started = true;
-             co_return;
-         }();
+        auto task = [&]() -> Task<> {
+            started = true;
+            co_return;
+        }();
 
-         EXPECT_FALSE(started);
+        EXPECT_FALSE(started);
 
-         // Act
-         task.Run();
+        // Act
+        task.Run();
 
-         // Assert
-         EXPECT_TRUE(started);
-     }
+        // Assert
+        EXPECT_TRUE(started);
+    }
 
-     TEST(TaskTests, taskLambdaReturnValue)
-     {
-         // Arrange
-         auto expected = 42;
+    TEST(TaskTests, taskLambdaReturnValue)
+    {
+        // Arrange
+        auto expected = 42;
 
-         auto task = [=]() -> Task<int> { co_return expected; }();
+        auto task = [=]() -> Task<int> { co_return expected; }();
 
-         // Act
-         auto result = task.Run();
+        // Act
+        auto result = task.Run();
 
-         // Assert
-         EXPECT_EQ(result, expected);
-     }
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
 
     TEST(TaskTests, taskStartsWhenRun)
     {
@@ -244,10 +261,181 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result.Moves(), 0u);
     }
 
-    /* ToDo:
-     *   Run after completed
-     *   Tasks throw exceptions
-     *   Multiple tasks await result
-     */
+    TEST(TaskTests, runAfterCompleteThrows)
+    {
+        // Arrange
+        auto task = EmptyTask();
+        task.Run();
+
+        // Act & Assert
+        EXPECT_THROW(task.Run(), std::exception);
+    }
+
+    // Note: this will deadlock - needs a distinction between task initialized and task scheduled
+    TEST(TaskTests, DISABLED_resultBeforeCompleteThrows)
+    {
+        // Arrange
+        auto task = EmptyTask();
+
+        // Act & Assert
+        EXPECT_THROW(task.Result(), std::exception);
+    }
+
+    TEST(TaskTests, resultAfterCompleteReturnsValue)
+    {
+        // Arrange
+        auto expected = 1;
+        auto task = CopyResult(expected);
+        task.Run();
+
+        // Act
+        auto result = task.Result();
+
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
+
+    TEST(TaskTests, waitTaskRunOnThread)
+    {
+        // Arrange
+        auto expected = 42;
+        auto result = 0;
+        auto task = CopyResult(expected);
+
+        // Act
+        std::thread waiter([&]() {
+            task.Wait();
+            result = task.Result();
+        });
+
+        task.Run();
+        waiter.join();
+
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
+
+    TEST(TaskTests, resultTaskRunOnThread)
+    {
+        // Arrange
+        auto expected = 42;
+        auto result = 0;
+        auto task = CopyResult(expected);
+
+        // Act
+        std::thread waiter([&]() { result = task.Result(); });
+
+        task.Run();
+        waiter.join();
+
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
+
+    TEST(TaskTests, multipleThreadsWaitTaskRunOnThread)
+    {
+        // Arrange
+        constexpr size_t threadCount = 10u;
+        auto returned = 42;
+        auto expected = returned * threadCount;
+        auto task = CopyResult(returned);
+        std::array<std::thread, threadCount> threads;
+        std::atomic_int result = 0;
+
+        // Act
+        for (auto i = 0u; i < threadCount; ++i)
+        {
+            threads[i] = std::thread([&]() {
+                task.Wait();
+                result.fetch_add(task.Result());
+            });
+        }
+
+        task.Run();
+
+        for (auto i = 0u; i < threadCount; ++i)
+        {
+            threads[i].join();
+        }
+
+        // Assert
+        EXPECT_EQ(result.load(), expected);
+    }
+
+    TEST(TaskTests, awaitTaskOnThread)
+    {
+        // Arrange
+        auto expected = 42;
+        auto result = 0;
+        auto task = CopyResult(expected);
+
+        // Act
+        std::thread worker([&]() {
+            auto workerTask = [&]() -> Task<> { result = co_await task; }();
+            workerTask.Run();
+        });
+
+        task.Run();
+        worker.join();
+
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
+
+    TEST(TaskTests, multipleAwaitTaskRunOnThread)
+    {
+        // Arrange
+        constexpr size_t threadCount = 10u;
+        auto returned = 42;
+        auto expected = returned * threadCount;
+        auto task = CopyResult(returned);
+        std::array<std::thread, threadCount> threads;
+        std::atomic_int result = 0;
+
+        // Act
+        for (auto i = 0u; i < threadCount; ++i)
+        {
+            threads[i] = std::thread([&]() {
+                auto threadTask = [&]() -> Task<int> {
+                    auto innerResult = co_await task;
+                    co_return innerResult;
+                }();
+
+                auto threadResult = threadTask.Run();
+
+                result.fetch_add(threadResult);
+            });
+        }
+
+        task.Run();
+
+        for (auto i = 0u; i < threadCount; ++i)
+        {
+            threads[i].join();
+        }
+
+        // Assert
+        EXPECT_EQ(result.load(), expected);
+    }
+
+    TEST(TaskTests, awaitTaskAlreadyCompleted)
+    {
+        // Arrange
+        auto expected = 42;
+
+        auto task1 = [&]() -> Task<int> { co_return expected; }();
+        task1.Run();
+
+        // Act
+        auto task2 = [&]() -> Task<int> {
+            auto innerResult = co_await task1;
+            co_return innerResult;
+        }();
+
+        auto result = task2.Run();
+
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
 
 }  // namespace TaskSystem::Tests

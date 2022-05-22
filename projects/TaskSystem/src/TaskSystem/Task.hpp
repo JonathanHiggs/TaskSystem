@@ -41,20 +41,64 @@ namespace TaskSystem
             };
         }  // namespace States
 
-        class TaskFinalAwaitable
+        class TaskPromiseBase;
+
+        class TaskInitialSuspend final
         {
         public:
+            using promise_type = TaskPromiseBase;
+            using handle_type = std::coroutine_handle<promise_type>;
+
+        private:
+            promise_type & promise;
+
+        public:
+            TaskInitialSuspend(promise_type & promise) noexcept : promise(promise)
+            { }
+
+            constexpr auto await_ready() const noexcept
+            {
+                return false;
+                // ToDo:
+                // auto * taskManager = promise.TaskManager();
+                // return taskManager && taskManager->IsWorkerThread();
+            }
+
+            void await_suspend(std::coroutine_handle<>) const noexcept
+            {
+                // ToDo:
+                // auto * taskManager = promise.TaskManager();
+                // if (!taskManager) {
+                //     return;
+                // }
+                //
+                // auto handle = handle_type::from_promise(promise);
+                // taskManager->Schedule(handle);
+            }
+
+            constexpr void await_resume() const noexcept
+            { }
+        };
+
+        class TaskFinalSuspend final
+        {
+        public:
+            using promise_type = TaskPromiseBase;
+            using handle_type = std::coroutine_handle<promise_type>;
+
+        private:
+            promise_type & promise;
+
+        public:
+            explicit TaskFinalSuspend(promise_type & promise) noexcept : promise(promise)
+            { }
+
             constexpr bool await_ready() const noexcept
             {
                 return false;
             }
 
-            template <typename TResult>
-            std::coroutine_handle<> await_suspend(std::coroutine_handle<TResult> coroutine) const noexcept
-            {
-                auto continuation = coroutine.promise().Continuation();
-                return continuation ? continuation : std::noop_coroutine();
-            }
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<>) const noexcept;
 
             constexpr void await_resume() const noexcept
             { }
@@ -63,32 +107,69 @@ namespace TaskSystem
         class TaskPromiseBase
         {
         private:
+            // static inline constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
+
             std::coroutine_handle<> continuation;
+            // TaskManager * taskManager;
+
+            // alignas(CACHE_LINE_SIZE)
+            std::atomic_flag resultReady;
 
         public:
             TaskPromiseBase() noexcept : continuation(nullptr)
-            { }
-
-            std::suspend_always initial_suspend() noexcept
             {
-                return {};
+                resultReady.clear(std::memory_order::relaxed);
             }
 
-            TaskFinalAwaitable final_suspend() noexcept
+            TaskInitialSuspend initial_suspend() noexcept
             {
-                return {};
+                return TaskInitialSuspend(*this);
             }
 
-            void SetContinuation(std::coroutine_handle<> value) noexcept
+            TaskFinalSuspend final_suspend() noexcept
             {
-                continuation = value;
+                resultReady.test_and_set();  // Maybe: can this be memory_order_relaxed?
+                resultReady.notify_all();
+
+                return TaskFinalSuspend(*this);
             }
 
-            std::coroutine_handle<> Continuation() noexcept
+            std::coroutine_handle<> Continuation() const noexcept
             {
                 return continuation;
             }
+
+            void Continuation(std::coroutine_handle<> value)
+            {
+                if (continuation != nullptr)
+                {
+                    // throw std::exception("Multiple continuations for a single promise");
+                }
+
+                continuation = value;
+            }
+
+            void Wait() const noexcept
+            {
+                resultReady.wait(false);
+            }
+
+            // TaskManager * TaskManager() const noexcept
+            // {
+            //     return taskManager;
+            // }
+            //
+            // void TaskManager(TaskManager * value) noexcept
+            // {
+            //     taskManager = value;
+            // }
         };
+
+        std::coroutine_handle<> TaskFinalSuspend::await_suspend(std::coroutine_handle<>) const noexcept
+        {
+            auto continuation = promise.Continuation();
+            return continuation ? continuation : std::noop_coroutine();
+        }
 
         template <typename TResult>
         class TaskPromise final : public TaskPromiseBase
@@ -221,6 +302,37 @@ namespace TaskSystem
             }
         };
 
+        template <typename TResult>
+        class TaskInitialAwaiter
+        {
+        public:
+            using promise_type = TaskPromise<TResult>;
+            using handle_type = std::coroutine_handle<promise_type>;
+
+        private:
+            promise_type & promise;
+
+        public:
+            TaskInitialAwaiter(promise_type & promise) noexcept : promise(promise)
+            { }
+
+            bool await_ready() const noexcept
+            {
+                return false;
+            }
+
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<> callerHandle) noexcept
+            {
+                promise.Continuation(callerHandle);
+                return handle_type::from_promise(promise);
+            }
+
+            TResult await_resume() noexcept
+            {
+                return promise.return_value();
+            }
+        };
+
     }  // namespace Detail
 
     template <typename TResult = void>
@@ -249,7 +361,7 @@ namespace TaskSystem
 
             void_handle_type await_suspend(void_handle_type caller) noexcept
             {
-                handle.promise().SetContinuation(caller);
+                handle.promise().Continuation(caller);
                 return handle;
             }
         };
@@ -401,6 +513,42 @@ namespace TaskSystem
 
             handle.resume();
         }
+
+        void Wait()
+        {
+            if (!handle)
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            if (handle.done())
+            {
+                return;
+            }
+
+            // ToDo: throw error if initialized but not scheduled?
+
+            handle.promise().Wait();
+        }
+
+        [[nodiscard]] TResult Result()
+        {
+            Wait();
+            return handle.promise().Result();
+        }
+
+        // [[nodiscard]] Task & ScheduleOn(TaskManager & taskManager) &&
+        // {
+        //     handle.promise().TaskManager(taskManager);
+        //     return *this;
+        // }
+        //
+        // [[nodiscard]] Task & ContinueOn(TaskManager & taskManager) &&
+        // {
+        //     handle.promise().ContinuationTaskManager(taskManager);
+        //     return *this;
+        // }
     };
 
     namespace Detail
