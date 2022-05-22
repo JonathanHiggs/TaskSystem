@@ -1,5 +1,7 @@
 #pragma once
 
+#include <TaskSystem/ITaskScheduler.hpp>
+
 #include <atomic>
 #include <coroutine>
 #include <exception>
@@ -7,7 +9,7 @@
 #include <variant>
 
 
-namespace TaskSystem
+namespace TaskSystem::inline v1_0
 {
 
     template <typename TResult>
@@ -17,6 +19,7 @@ namespace TaskSystem
     {
         namespace States
         {
+
             struct Initialized : std::monostate
             {
             };
@@ -39,6 +42,7 @@ namespace TaskSystem
             {
                 std::exception_ptr Exception;
             };
+
         }  // namespace States
 
         class TaskPromiseBase;
@@ -53,28 +57,11 @@ namespace TaskSystem
             promise_type & promise;
 
         public:
-            TaskInitialSuspend(promise_type & promise) noexcept : promise(promise)
-            { }
+            explicit TaskInitialSuspend(promise_type & promise) noexcept;
 
-            constexpr auto await_ready() const noexcept
-            {
-                return false;
-                // ToDo:
-                // auto * taskManager = promise.TaskManager();
-                // return taskManager && taskManager->IsWorkerThread();
-            }
+            bool await_ready() const noexcept;
 
-            void await_suspend(std::coroutine_handle<>) const noexcept
-            {
-                // ToDo:
-                // auto * taskManager = promise.TaskManager();
-                // if (!taskManager) {
-                //     return;
-                // }
-                //
-                // auto handle = handle_type::from_promise(promise);
-                // taskManager->Schedule(handle);
-            }
+            void await_suspend(std::coroutine_handle<>) const noexcept;
 
             constexpr void await_resume() const noexcept
             { }
@@ -90,8 +77,7 @@ namespace TaskSystem
             promise_type & promise;
 
         public:
-            explicit TaskFinalSuspend(promise_type & promise) noexcept : promise(promise)
-            { }
+            explicit TaskFinalSuspend(promise_type & promise) noexcept;
 
             constexpr bool await_ready() const noexcept
             {
@@ -107,69 +93,28 @@ namespace TaskSystem
         class TaskPromiseBase
         {
         private:
-            // static inline constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
-
             std::coroutine_handle<> continuation;
-            // TaskManager * taskManager;
+            ITaskScheduler * taskScheduler;
 
+            // static inline constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
             // alignas(CACHE_LINE_SIZE)
             std::atomic_flag resultReady;
 
         public:
-            TaskPromiseBase() noexcept : continuation(nullptr)
-            {
-                resultReady.clear(std::memory_order::relaxed);
-            }
+            TaskPromiseBase() noexcept;
 
-            TaskInitialSuspend initial_suspend() noexcept
-            {
-                return TaskInitialSuspend(*this);
-            }
+            TaskInitialSuspend initial_suspend() noexcept;
 
-            TaskFinalSuspend final_suspend() noexcept
-            {
-                resultReady.test_and_set();  // Maybe: can this be memory_order_relaxed?
-                resultReady.notify_all();
+            TaskFinalSuspend final_suspend() noexcept;
 
-                return TaskFinalSuspend(*this);
-            }
+            std::coroutine_handle<> Continuation() const noexcept;
+            void Continuation(std::coroutine_handle<> value);
 
-            std::coroutine_handle<> Continuation() const noexcept
-            {
-                return continuation;
-            }
+            ITaskScheduler * TaskScheduler() const noexcept;
+            void TaskScheduler(ITaskScheduler * value) noexcept;
 
-            void Continuation(std::coroutine_handle<> value)
-            {
-                if (continuation != nullptr)
-                {
-                    // throw std::exception("Multiple continuations for a single promise");
-                }
-
-                continuation = value;
-            }
-
-            void Wait() const noexcept
-            {
-                resultReady.wait(false);
-            }
-
-            // TaskManager * TaskManager() const noexcept
-            // {
-            //     return taskManager;
-            // }
-            //
-            // void TaskManager(TaskManager * value) noexcept
-            // {
-            //     taskManager = value;
-            // }
+            void Wait() const noexcept;
         };
-
-        std::coroutine_handle<> TaskFinalSuspend::await_suspend(std::coroutine_handle<>) const noexcept
-        {
-            auto continuation = promise.Continuation();
-            return continuation ? continuation : std::noop_coroutine();
-        }
 
         template <typename TResult>
         class TaskPromise final : public TaskPromiseBase
@@ -333,25 +278,15 @@ namespace TaskSystem
             }
         };
 
-    }  // namespace Detail
-
-    template <typename TResult = void>
-    class [[nodiscard]] Task final
-    {
-    public:
-        using value_type = TResult;
-        using promise_type = Detail::TaskPromise<value_type>;
-        using handle_type = std::coroutine_handle<promise_type>;
-
-    private:
-        struct AwaitableBase
+        template <typename TResult>
+        struct TaskAwaitableBase
         {
+            using promise_type = TaskPromise<TResult>;
             using handle_type = std::coroutine_handle<promise_type>;
-            using void_handle_type = std::coroutine_handle<>;
 
             handle_type handle;
 
-            AwaitableBase(handle_type handle) noexcept : handle(handle)
+            TaskAwaitableBase(handle_type handle) noexcept : handle(handle)
             { }
 
             bool await_ready() const noexcept
@@ -359,13 +294,71 @@ namespace TaskSystem
                 return !handle || handle.done();
             }
 
-            void_handle_type await_suspend(void_handle_type caller) noexcept
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<> caller) noexcept
             {
                 handle.promise().Continuation(caller);
                 return handle;
             }
         };
 
+        template <typename TResult>
+        struct TaskAwaitableCopyResult final : TaskAwaitableBase<TResult>
+        {
+            using TaskAwaitableBase<TResult>::TaskAwaitableBase;
+
+            TResult await_resume()
+            {
+                if (!this->handle)
+                {
+                    // ToDo: better exception
+                    throw std::exception("No handle");
+                }
+
+                return this->handle.promise().Result();
+            }
+        };
+
+        template <typename TResult>
+        struct TaskAwaitableMoveResult final : TaskAwaitableBase<TResult>
+        {
+            using TaskAwaitableBase<TResult>::TaskAwaitableBase;
+
+            TResult await_resume()
+            {
+                if (!this->handle)
+                {
+                    // ToDo: better exception
+                    throw std::exception("No handle");
+                }
+
+                return std::move(this->handle.promise()).Result();
+            }
+        };
+
+        struct TaskAwaitableVoid final : TaskAwaitableBase<void>
+        {
+            using TaskAwaitableBase::TaskAwaitableBase;
+
+            constexpr void await_resume() const noexcept
+            { }
+        };
+
+    }  // namespace Detail
+
+    template <typename = void>
+    class Task;
+
+    template <>
+    class [[nodiscard]] Task<void> final
+    {
+    public:
+        using value_type = void;
+        using promise_type = Detail::TaskPromise<value_type>;
+        using handle_type = std::coroutine_handle<promise_type>;
+
+        friend struct ITaskScheduler;
+
+    private:
         handle_type handle;
 
     public:
@@ -406,52 +399,20 @@ namespace TaskSystem
             }
         }
 
+        inline operator std::coroutine_handle<>() const noexcept
+        {
+            return handle;
+        }
+
         template <typename TFunc, typename T = std::invoke_result_t<TFunc>>
         static Task<T> From(TFunc && fn)
         {
             co_return std::forward<TFunc>(fn)();
         }
 
-        auto operator co_await() const & noexcept
+        Detail::TaskAwaitableVoid operator co_await() const noexcept
         {
-            struct Awaitable final : AwaitableBase
-            {
-                using AwaitableBase::AwaitableBase;
-
-                decltype(auto) await_resume()
-                {
-                    if (!this->handle)
-                    {
-                        // ToDo: better exception
-                        throw std::exception("No handle");
-                    }
-
-                    return this->handle.promise().Result();
-                }
-            };
-
-            return Awaitable{ handle };
-        }
-
-        auto operator co_await() const && noexcept
-        {
-            struct Awaitable final : AwaitableBase
-            {
-                using AwaitableBase::AwaitableBase;
-
-                decltype(auto) await_resume()
-                {
-                    if (!this->handle)
-                    {
-                        // ToDo: better exception
-                        throw std::exception("No handle");
-                    }
-
-                    return std::move(this->handle.promise()).Result();
-                }
-            };
-
-            return Awaitable{ handle };
+            return Detail::TaskAwaitableVoid{ handle };
         }
 
         bool IsReady() const noexcept
@@ -459,21 +420,6 @@ namespace TaskSystem
             return !handle || handle.done();
         }
 
-        template <typename TValue = TResult, std::enable_if_t<!std::is_void_v<TValue>> * = nullptr>
-        TValue Run() &
-        {
-            if (!handle || handle.done())
-            {
-                // ToDo: better exception
-                throw std::exception("Nope");
-            }
-
-            handle.resume();
-
-            return handle.promise().Result();
-        }
-
-        template <typename TValue = TResult, std::enable_if_t<std::is_void_v<TValue>> * = nullptr>
         void Run() &
         {
             if (!handle || handle.done())
@@ -485,24 +431,6 @@ namespace TaskSystem
             handle.resume();
         }
 
-        template <typename TValue = TResult, std::enable_if_t<!std::is_void_v<TValue>> * = nullptr>
-        TValue && Run() &&
-        {
-            if (!handle || handle.done())
-            {
-                // ToDo: better exception
-                throw std::exception("Nope");
-            }
-
-            handle.resume();
-
-            if constexpr (!std::is_void_v<TValue>)
-            {
-                return std::move(handle.promise()).Result();
-            }
-        }
-
-        template <typename TValue = TResult, std::enable_if_t<std::is_void_v<TValue>> * = nullptr>
         void Run() &&
         {
             if (!handle || handle.done())
@@ -532,21 +460,164 @@ namespace TaskSystem
             handle.promise().Wait();
         }
 
-        [[nodiscard]] TResult Result()
+        void ScheduleOn(ITaskScheduler & taskScheduler) &
+        {
+            handle.promise().TaskScheduler(&taskScheduler);
+        }
+
+        [[nodiscard]] Task & ScheduleOn(ITaskScheduler & taskScheduler) &&
+        {
+            handle.promise().TaskScheduler(&taskScheduler);
+            return *this;
+        }
+    };
+
+    template <typename TResult>
+    class [[nodiscard]] Task final
+    {
+    public:
+        using value_type = TResult;
+        using promise_type = Detail::TaskPromise<value_type>;
+        using handle_type = std::coroutine_handle<promise_type>;
+
+        friend struct ITaskScheduler;
+
+    private:
+        handle_type handle;
+
+    public:
+        Task() noexcept : handle(nullptr)
+        { }
+
+        explicit Task(handle_type handle) noexcept : handle(handle)
+        { }
+
+        Task(Task const &) = delete;
+        Task & operator=(Task const &) = delete;
+
+        Task(Task && other) noexcept : handle(std::exchange(other.handle, nullptr))
+        { }
+
+        Task & operator=(Task && other) noexcept
+        {
+            if (std::addressof(other) == this)
+            {
+                return *this;
+            }
+
+            if (handle)
+            {
+                handle.destroy();
+            }
+
+            handle = std::exchange(other.handle, nullptr);
+
+            return *this;
+        }
+
+        ~Task() noexcept
+        {
+            if (handle)
+            {
+                handle.destroy();
+            }
+        }
+
+        inline operator std::coroutine_handle<>() const noexcept
+        {
+            return handle;
+        }
+
+        template <typename TFunc, typename T = std::invoke_result_t<TFunc>>
+        static Task<T> From(TFunc && fn)
+        {
+            co_return std::forward<TFunc>(fn)();
+        }
+
+        auto operator co_await() const & noexcept
+        {
+            return Detail::TaskAwaitableCopyResult<TResult>{ handle };
+        }
+
+        auto operator co_await() const && noexcept
+        {
+            return Detail::TaskAwaitableMoveResult<TResult>{ handle };
+        }
+
+        bool IsReady() const noexcept
+        {
+            return !handle || handle.done();
+        }
+
+        template <typename TValue = TResult>
+        TValue Run() &
+        {
+            if (!handle || handle.done())
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            handle.resume();
+
+            return handle.promise().Result();
+        }
+
+        template <typename TValue = TResult>
+        TValue && Run() &&
+        {
+            if (!handle || handle.done())
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            handle.resume();
+
+            if constexpr (!std::is_void_v<TValue>)
+            {
+                return std::move(handle.promise()).Result();
+            }
+        }
+
+        void Wait()
+        {
+            if (!handle)
+            {
+                // ToDo: better exception
+                throw std::exception("Nope");
+            }
+
+            if (handle.done())
+            {
+                return;
+            }
+
+            // ToDo: throw error if initialized but not scheduled?
+
+            handle.promise().Wait();
+        }
+
+        TResult Result()
         {
             Wait();
             return handle.promise().Result();
         }
 
-        // [[nodiscard]] Task & ScheduleOn(TaskManager & taskManager) &&
+        void ScheduleOn(ITaskScheduler & taskScheduler) &
+        {
+            handle.promise().TaskScheduler(&taskScheduler);
+        }
+
+        [[nodiscard]] Task & ScheduleOn(ITaskScheduler & taskScheduler) &&
+        {
+            handle.promise().TaskScheduler(&taskScheduler);
+            return *this;
+        }
+
+        // [[nodiscard]] Task & ContinueOn(TaskScheduler & taskScheduler) &&
         // {
-        //     handle.promise().TaskManager(taskManager);
-        //     return *this;
-        // }
-        //
-        // [[nodiscard]] Task & ContinueOn(TaskManager & taskManager) &&
-        // {
-        //     handle.promise().ContinuationTaskManager(taskManager);
+        //     handle.promise().ContinuationTaskScheduler(taskScheduler);
         //     return *this;
         // }
     };
@@ -576,4 +647,4 @@ namespace TaskSystem
 
     }  // namespace Detail
 
-}  // namespace TaskSystem
+}  // namespace TaskSystem::inline v1_0

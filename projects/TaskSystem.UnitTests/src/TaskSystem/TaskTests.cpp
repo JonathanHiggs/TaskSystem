@@ -1,5 +1,6 @@
 #include <TaskSystem/Task.hpp>
 
+#include <TaskSystem/Utils/TestTaskFactory.hpp>
 #include <TaskSystem/Utils/Tracked.hpp>
 
 #include <gtest/gtest.h>
@@ -10,23 +11,12 @@
 
 
 using TaskSystem::Utils::Tracked;
+using TaskSystem::Utils::EmptyTask;
+using TaskSystem::Utils::CopyResult;
 
 
 namespace TaskSystem::Tests
 {
-    namespace
-    {
-        Task<> EmptyTask()
-        {
-            co_return;
-        }
-
-        template <typename T>
-        Task<T> CopyResult(T const & value)
-        {
-            co_return value;
-        }
-    }  // namespace
 
     TEST(TaskTests, taskFromLambdaReturnVoid)
     {
@@ -49,7 +39,7 @@ namespace TaskSystem::Tests
         // Arrange
         auto expected = 42;
 
-        auto task = Task<>::From([=]() { return expected; });
+        auto task = Task<int>::From([=]() { return expected; });
 
         // Act
         auto result = task.Run();
@@ -275,7 +265,7 @@ namespace TaskSystem::Tests
     TEST(TaskTests, DISABLED_resultBeforeCompleteThrows)
     {
         // Arrange
-        auto task = EmptyTask();
+        auto task = CopyResult(42);
 
         // Act & Assert
         EXPECT_THROW(task.Result(), std::exception);
