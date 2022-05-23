@@ -9,6 +9,8 @@ file(GLOB_RECURSE files CONFIGURE_DEPENDS
 
 target_sources(tasksystem_unittests PRIVATE ${files})
 
+set_target_properties(tasksystem_unittests PROPERTIES OUTPUT_NAME "TaskSystem.UnitTests")
+
 target_compile_options(tasksystem_unittests PRIVATE
     "/std:c++20"                    # c++ standard
     "/bigobj"                       # increases the number of sections in .obj files

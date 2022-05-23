@@ -1,4 +1,4 @@
-#include <TaskSystem/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/v1_0/SynchronousTaskScheduler.hpp>
 
 
 namespace TaskSystem::inline v1_0

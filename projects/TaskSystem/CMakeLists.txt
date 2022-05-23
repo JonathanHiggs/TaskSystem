@@ -7,6 +7,8 @@ file(GLOB_RECURSE files CONFIGURE_DEPENDS
 
 target_sources(tasksystem PRIVATE ${files})
 
+set_target_properties(tasksystem PROPERTIES OUTPUT_NAME "TaskSystem")
+
 target_compile_options(tasksystem PRIVATE
     "/std:c++20"                    # c++ standard
     "/bigobj"                       # increases the number of sections in .obj files
