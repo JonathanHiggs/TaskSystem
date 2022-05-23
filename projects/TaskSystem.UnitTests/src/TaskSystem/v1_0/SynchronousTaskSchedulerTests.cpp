@@ -1,4 +1,4 @@
-#include <TaskSystem/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/v1_0/SynchronousTaskScheduler.hpp>
 
 #include <TaskSystem/Utils/TestTaskFactory.hpp>
 

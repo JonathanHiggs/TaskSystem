@@ -88,9 +88,13 @@ namespace TaskSystem::v1_1
 
             void await_resume() const noexcept
             {
+#if _DEBUG
                 // Check this thread set the promise to running
                 auto set = promise.TrySetRunning();
                 assert(set);
+#else
+                promise.TrySetRunning();
+#endif
             }
         };
 

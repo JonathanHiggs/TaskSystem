@@ -1,6 +1,6 @@
 #pragma once
 
-#include <TaskSystem/Task.hpp>
+#include <TaskSystem/v1_0/Task.hpp>
 
 #include <type_traits>
 

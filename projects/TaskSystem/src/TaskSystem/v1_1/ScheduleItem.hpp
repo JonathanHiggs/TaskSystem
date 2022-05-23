@@ -27,35 +27,35 @@ namespace TaskSystem::v1_1
     };
 
     // template <typename = void>
-    // class ScheduleItem2;
+    // class ScheduleItem;
     //
     // template <>
-    // class ScheduleItem2<void>
+    // class ScheduleItem<void>
     // {
     // private:
     //     std::function<void()> func;
     //
     // public:
-    //     ScheduleItem2(std::function<void()> && func) : func(std::move(func))
+    //     ScheduleItem(std::function<void()> && func) : func(std::move(func))
     //     { }
     //
     //     std::exception_ptr Run() noexcept;
     // };
     //
     // template<>
-    // class ScheduleItem2<std::function<void()>
+    // class ScheduleItem<std::function<void()>
     // {
     //
     // };
     //
     // template <>
-    // class ScheduleItem2<void (*)()>
+    // class ScheduleItem<void (*)()>
     // {
     //
     // };
     //
     // template<typename TResult>
-    // class ScheduleItem2<Task<TResult>>
+    // class ScheduleItem<Task<TResult>>
     // {
     //
     // };
