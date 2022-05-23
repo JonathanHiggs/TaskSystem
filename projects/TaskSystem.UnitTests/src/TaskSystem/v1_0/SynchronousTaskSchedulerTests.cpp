@@ -9,10 +9,10 @@ using TaskSystem::Utils::EmptyTask;
 using TaskSystem::Utils::CopyResult;
 
 
-namespace TaskSystem::Tests
+namespace TaskSystem::v1_0::Tests
 {
 
-    TEST(SynchronousTaskSchedulerTests, scheduledTaskCompletes)
+    TEST(SynchronousTaskSchedulerTests_v1_0, scheduledTaskCompletes)
     {
         // Arrange
         auto completed = false;
@@ -28,7 +28,7 @@ namespace TaskSystem::Tests
         EXPECT_TRUE(completed);
     }
 
-    TEST(SynchronousTaskSchedulerTests, taskScheduleOnCompletes)
+    TEST(SynchronousTaskSchedulerTests_v1_0, taskScheduleOnCompletes)
     {
         // Arrange
         auto scheduler = SynchronousTaskScheduler();

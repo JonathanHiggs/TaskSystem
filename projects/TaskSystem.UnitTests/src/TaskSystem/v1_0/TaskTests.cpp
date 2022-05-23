@@ -15,10 +15,10 @@ using TaskSystem::Utils::EmptyTask;
 using TaskSystem::Utils::CopyResult;
 
 
-namespace TaskSystem::Tests
+namespace TaskSystem::v1_0::Tests
 {
 
-    TEST(TaskTests, taskFromLambdaReturnVoid)
+    TEST(TaskTests_v1_0, taskFromLambdaReturnVoid)
     {
         // Arrange
         bool started = false;
@@ -34,7 +34,7 @@ namespace TaskSystem::Tests
         EXPECT_TRUE(started);
     }
 
-    TEST(TaskTests, taskFromLambdaReturnValue)
+    TEST(TaskTests_v1_0, taskFromLambdaReturnValue)
     {
         // Arrange
         auto expected = 42;
@@ -48,7 +48,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests, taskLambdaReturnVoid)
+    TEST(TaskTests_v1_0, taskLambdaReturnVoid)
     {
         // Arrange
         bool started = false;
@@ -67,7 +67,7 @@ namespace TaskSystem::Tests
         EXPECT_TRUE(started);
     }
 
-    TEST(TaskTests, taskLambdaReturnValue)
+    TEST(TaskTests_v1_0, taskLambdaReturnValue)
     {
         // Arrange
         auto expected = 42;
@@ -81,7 +81,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests, taskStartsWhenRun)
+    TEST(TaskTests_v1_0, taskStartsWhenRun)
     {
         // Arrange
         bool started = false;
@@ -97,7 +97,7 @@ namespace TaskSystem::Tests
         EXPECT_TRUE(started);
     }
 
-    TEST(TaskTests, taskStartsWhenAwaited)
+    TEST(TaskTests_v1_0, taskStartsWhenAwaited)
     {
         // Arrange
         bool started = false;
@@ -119,7 +119,7 @@ namespace TaskSystem::Tests
         EXPECT_TRUE(started);
     }
 
-    TEST(TaskTests, runDefaultConstructedTaskThrows)
+    TEST(TaskTests_v1_0, runDefaultConstructedTaskThrows)
     {
         // Arrange
         auto task = Task<>();
@@ -133,7 +133,7 @@ namespace TaskSystem::Tests
         co_return expected;
     };
 
-    TEST(TaskTests, taskRuturnsValue)
+    TEST(TaskTests_v1_0, taskRuturnsValue)
     {
         // Arrange
         auto expected = 42;
@@ -146,7 +146,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(actual, expected);
     }
 
-    TEST(TaskTests, taskReturnsReference)
+    TEST(TaskTests_v1_0, taskReturnsReference)
     {
         // Arrange
         auto expected = 42;
@@ -159,7 +159,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(actual, expected);
     }
 
-    TEST(TaskTests, taskReturnsPointer)
+    TEST(TaskTests_v1_0, taskReturnsPointer)
     {
         // Arrange
         auto expected = 42;
@@ -172,7 +172,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(actual, &expected);
     }
 
-    TEST(TaskTests, taskNotReadyBeforeRun)
+    TEST(TaskTests_v1_0, taskNotReadyBeforeRun)
     {
         // Arrange
         auto task = []() -> Task<> { co_return; }();
@@ -184,7 +184,7 @@ namespace TaskSystem::Tests
         EXPECT_FALSE(isReady);
     }
 
-    TEST(TaskTests, taskReadyAfterRun)
+    TEST(TaskTests_v1_0, taskReadyAfterRun)
     {
         // Arrange
         auto task = []() -> Task<> { co_return; }();
@@ -197,7 +197,7 @@ namespace TaskSystem::Tests
         EXPECT_TRUE(isReady);
     }
 
-    TEST(TaskTests, LValueTestReturnByValueCopiedOnce)
+    TEST(TaskTests_v1_0, LValueTestReturnByValueCopiedOnce)
     {
         // Arrange
         auto task = []() -> Task<Tracked> { co_return Tracked(); }();
@@ -210,7 +210,7 @@ namespace TaskSystem::Tests
         EXPECT_GT(result.Moves(), 1u);
     }
 
-    TEST(TaskTests, LValueReturnByRefNeverCopiedOrMoved)
+    TEST(TaskTests_v1_0, LValueReturnByRefNeverCopiedOrMoved)
     {
         // Arrange
         auto tracked = Tracked();
@@ -224,7 +224,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result.Moves(), 0u);
     }
 
-    TEST(TaskTests, RValueTestReturnByValueNeverCopied)
+    TEST(TaskTests_v1_0, RValueTestReturnByValueNeverCopied)
     {
         // Arrange
         auto task = []() -> Task<Tracked> { co_return Tracked(); };
@@ -237,7 +237,7 @@ namespace TaskSystem::Tests
         EXPECT_GT(result.Moves(), 1u);
     }
 
-    TEST(TaskTests, RValueTestReturnByRefNeverCopiedOrMoved)
+    TEST(TaskTests_v1_0, RValueTestReturnByRefNeverCopiedOrMoved)
     {
         // Arrange
         auto tracked = Tracked();
@@ -251,7 +251,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result.Moves(), 0u);
     }
 
-    TEST(TaskTests, runAfterCompleteThrows)
+    TEST(TaskTests_v1_0, runAfterCompleteThrows)
     {
         // Arrange
         auto task = EmptyTask();
@@ -262,7 +262,7 @@ namespace TaskSystem::Tests
     }
 
     // Note: this will deadlock - needs a distinction between task initialized and task scheduled
-    TEST(TaskTests, DISABLED_resultBeforeCompleteThrows)
+    TEST(TaskTests_v1_0, DISABLED_resultBeforeCompleteThrows)
     {
         // Arrange
         auto task = CopyResult(42);
@@ -271,7 +271,7 @@ namespace TaskSystem::Tests
         EXPECT_THROW(task.Result(), std::exception);
     }
 
-    TEST(TaskTests, resultAfterCompleteReturnsValue)
+    TEST(TaskTests_v1_0, resultAfterCompleteReturnsValue)
     {
         // Arrange
         auto expected = 1;
@@ -285,7 +285,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests, waitTaskRunOnThread)
+    TEST(TaskTests_v1_0, waitTaskRunOnThread)
     {
         // Arrange
         auto expected = 42;
@@ -305,7 +305,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests, resultTaskRunOnThread)
+    TEST(TaskTests_v1_0, resultTaskRunOnThread)
     {
         // Arrange
         auto expected = 42;
@@ -322,7 +322,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests, multipleThreadsWaitTaskRunOnThread)
+    TEST(TaskTests_v1_0, multipleThreadsWaitTaskRunOnThread)
     {
         // Arrange
         constexpr size_t threadCount = 10u;
@@ -352,7 +352,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result.load(), expected);
     }
 
-    TEST(TaskTests, awaitTaskOnThread)
+    TEST(TaskTests_v1_0, awaitTaskOnThread)
     {
         // Arrange
         auto expected = 42;
@@ -372,7 +372,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests, multipleAwaitTaskRunOnThread)
+    TEST(TaskTests_v1_0, multipleAwaitTaskRunOnThread)
     {
         // Arrange
         constexpr size_t threadCount = 4u;
@@ -408,7 +408,7 @@ namespace TaskSystem::Tests
         EXPECT_EQ(result.load(), expected);
     }
 
-    TEST(TaskTests, awaitTaskAlreadyCompleted)
+    TEST(TaskTests_v1_0, awaitTaskAlreadyCompleted)
     {
         // Arrange
         auto expected = 42;

@@ -5,29 +5,6 @@ namespace TaskSystem::inline v1_0
 {
     namespace Detail
     {
-
-        TaskInitialSuspend::TaskInitialSuspend(promise_type & promise) noexcept : promise(promise)
-        { }
-
-        bool TaskInitialSuspend::await_ready() const noexcept
-        {
-            auto * taskScheduler = promise.TaskScheduler();
-            return taskScheduler && taskScheduler->IsWorkerThread();
-        }
-
-        void TaskInitialSuspend::await_suspend(std::coroutine_handle<>) const noexcept
-        {
-            auto * taskScheduler = promise.TaskScheduler();
-            if (!taskScheduler)
-            {
-                return;
-            }
-
-            auto handle = handle_type::from_promise(promise);
-            // ToDo: promise.SetScheduled();
-            taskScheduler->Schedule(handle);
-        }
-
         TaskFinalSuspend::TaskFinalSuspend(promise_type & promise) noexcept : promise(promise)
         { }
 
@@ -56,11 +33,6 @@ namespace TaskSystem::inline v1_0
             : continuation(nullptr), continuationTaskScheduler(nullptr), taskScheduler(nullptr)
         {
             resultReady.clear(std::memory_order::relaxed);
-        }
-
-        TaskInitialSuspend TaskPromiseBase::initial_suspend() noexcept
-        {
-            return TaskInitialSuspend(*this);
         }
 
         TaskFinalSuspend TaskPromiseBase::final_suspend() noexcept

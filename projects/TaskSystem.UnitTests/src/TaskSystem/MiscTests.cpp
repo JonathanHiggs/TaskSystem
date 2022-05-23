@@ -75,4 +75,10 @@ namespace TaskSystem::Tests
         Log("[main] terminating\n");
     }
 
+    TEST(MiscTests, sizeOfStuff)
+    {
+        EXPECT_EQ(sizeof(void *), 8u);
+        EXPECT_EQ(sizeof(std::atomic_flag), 8u);
+    }
+
 }  // namespace TaskSystem::Tests
