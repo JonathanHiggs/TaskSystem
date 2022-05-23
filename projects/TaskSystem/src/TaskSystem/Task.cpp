@@ -24,6 +24,7 @@ namespace TaskSystem::inline v1_0
             }
 
             auto handle = handle_type::from_promise(promise);
+            // ToDo: promise.SetScheduled();
             taskScheduler->Schedule(handle);
         }
 
@@ -33,10 +34,26 @@ namespace TaskSystem::inline v1_0
         std::coroutine_handle<> TaskFinalSuspend::await_suspend(std::coroutine_handle<>) const noexcept
         {
             auto continuation = promise.Continuation();
-            return continuation ? continuation : std::noop_coroutine();
+            if (!continuation)
+            {
+                return std::noop_coroutine();
+            }
+
+            auto * taskScheduler = promise.ContinuationTaskScheduler();
+            if (!taskScheduler || taskScheduler->IsWorkerThread())
+            {
+                // ToDo: promise.SetRunning();
+                return continuation;
+            }
+
+            // ToDo: promise.SetScheduled();
+            taskScheduler->Schedule(continuation);
+
+            return std::noop_coroutine();
         }
 
-        TaskPromiseBase::TaskPromiseBase() noexcept : continuation(nullptr), taskScheduler(nullptr)
+        TaskPromiseBase::TaskPromiseBase() noexcept
+            : continuation(nullptr), continuationTaskScheduler(nullptr), taskScheduler(nullptr)
         {
             resultReady.clear(std::memory_order::relaxed);
         }
@@ -67,6 +84,16 @@ namespace TaskSystem::inline v1_0
             }
 
             continuation = value;
+        }
+
+        ITaskScheduler * TaskPromiseBase::ContinuationTaskScheduler() const noexcept
+        {
+            return continuationTaskScheduler;
+        }
+
+        void TaskPromiseBase::ContinuationTaskScheduler(ITaskScheduler * value) noexcept
+        {
+            continuationTaskScheduler = value;
         }
 
         ITaskScheduler * TaskPromiseBase::TaskScheduler() const noexcept

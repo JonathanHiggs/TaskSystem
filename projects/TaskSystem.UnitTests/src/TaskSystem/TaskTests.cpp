@@ -375,7 +375,7 @@ namespace TaskSystem::Tests
     TEST(TaskTests, multipleAwaitTaskRunOnThread)
     {
         // Arrange
-        constexpr size_t threadCount = 10u;
+        constexpr size_t threadCount = 4u;
         auto returned = 42;
         auto expected = returned * threadCount;
         auto task = CopyResult(returned);

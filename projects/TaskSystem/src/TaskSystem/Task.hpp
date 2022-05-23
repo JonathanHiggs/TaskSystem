@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TaskSystem/ITaskScheduler.hpp>
+#include <TaskSystem/TaskState.hpp>
 
 #include <atomic>
 #include <coroutine>
@@ -20,25 +21,40 @@ namespace TaskSystem::inline v1_0
         namespace States
         {
 
-            struct Initialized : std::monostate
+            struct Created final : std::monostate
+            {
+            };
+
+            struct Scheduled final : std::monostate
+            {
+            };
+
+            struct Running final : std::monostate
             {
             };
 
             template <typename TResult>
-            struct Completed
+            struct Completed final
             {
-                using rvalue_type = std::
-                    conditional_t<std::is_arithmetic_v<TResult> || std::is_pointer_v<TResult>, TResult, TResult &&>;
+                // using rvalue_type = std::
+                //     conditional_t<std::is_arithmetic_v<TResult> || std::is_pointer_v<TResult>, TResult, TResult &&>;
 
                 TResult Value;
             };
 
             template <>
-            struct Completed<void> : std::monostate
+            struct Completed<void> final : std::monostate
             {
             };
 
-            struct Error
+            // Maybe: CompletedEmpty?
+
+            struct Canceled final : std::monostate
+            {
+            };
+
+            // ToDo: rename Faulted
+            struct Error final
             {
                 std::exception_ptr Exception;
             };
@@ -90,15 +106,18 @@ namespace TaskSystem::inline v1_0
             { }
         };
 
+        inline constexpr size_t CacheLineSize = std::hardware_destructive_interference_size;
+
         class TaskPromiseBase
         {
         private:
-            std::coroutine_handle<> continuation;
+            alignas(CacheLineSize) mutable std::atomic_flag resultReady;
+
             ITaskScheduler * taskScheduler;
 
-            // static inline constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
-            // alignas(CACHE_LINE_SIZE)
-            std::atomic_flag resultReady;
+            ITaskScheduler * continuationTaskScheduler;
+            std::coroutine_handle<> continuation;
+
 
         public:
             TaskPromiseBase() noexcept;
@@ -110,6 +129,9 @@ namespace TaskSystem::inline v1_0
             std::coroutine_handle<> Continuation() const noexcept;
             void Continuation(std::coroutine_handle<> value);
 
+            ITaskScheduler * ContinuationTaskScheduler() const noexcept;
+            void ContinuationTaskScheduler(ITaskScheduler * value) noexcept;
+
             ITaskScheduler * TaskScheduler() const noexcept;
             void TaskScheduler(ITaskScheduler * value) noexcept;
 
@@ -120,10 +142,19 @@ namespace TaskSystem::inline v1_0
         class TaskPromise final : public TaskPromiseBase
         {
         private:
-            std::variant<States::Initialized, States::Completed<TResult>, States::Error> result;
+            using state_type = std::variant<
+                States::Created,
+                States::Scheduled,
+                States::Running,
+                States::Completed<TResult>,
+                States::Canceled,
+                States::Error>;
+
+            alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
+            state_type state;
 
         public:
-            TaskPromise() noexcept : TaskPromiseBase(), result(States::Initialized{})
+            TaskPromise() noexcept : TaskPromiseBase(), state(States::Created{})
             { }
 
             ~TaskPromise() = default;
@@ -132,43 +163,101 @@ namespace TaskSystem::inline v1_0
 
             void unhandled_exception() noexcept
             {
-                result = States::Error{ std::current_exception() };
+                while (stateFlag.test_and_set()) { }
+                state = States::Error{ std::current_exception() };
+                stateFlag.clear();
             }
 
             template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
-            void return_value(TValue && value) noexcept(std::is_nothrow_constructible_v<TResult, TValue &&>)
+            void return_value(TValue && value) noexcept
             {
-                result = States::Completed<TResult>{ std::forward<TValue>(value) };
+                while (stateFlag.test_and_set()) { }
+
+                if constexpr (std::is_nothrow_constructible_v<TResult, TValue &&>)
+                {
+                    state = States::Completed<TResult>{ std::forward<TValue>(value) };
+                }
+                else
+                {
+                    try
+                    {
+                        state = States::Completed<TResult>{ std::forward<TValue>(value) };
+                    }
+                    catch (...)
+                    {
+                        state = States::Error{ std::current_exception() };
+                    }
+                }
+
+                stateFlag.clear();
             }
 
-            TResult & Result() &
+            TaskState State() const noexcept
             {
-                if (auto * error = std::get_if<States::Error>(&result))
+                while (stateFlag.test_and_set()) { }
+                auto index = state.index();
+                stateFlag.clear();
+
+                switch (index)
                 {
-                    std::rethrow_exception(error->Exception);
+                case 0u: return TaskState::Created;
+                case 1u: return TaskState::Scheduled;
+                case 2u: return TaskState::Running;
+                case 3u: return TaskState::Completed;
+                case 4u: return TaskState::Canceled;
+                case 5u: return TaskState::Error;
+                case 6u:
+                default: return TaskState::Unknown;
                 }
-                else if (std::holds_alternative<States::Initialized>(result))
+            }
+
+            TResult Result() &
+            {
+                while (stateFlag.test_and_set()) { }
+
+                if (auto * error = std::get_if<States::Error>(&state))
                 {
+                    auto ex = error->Exception;
+                    stateFlag.clear();
+
+                    std::rethrow_exception(ex);
+                }
+                else if (std::holds_alternative<States::Created>(state))
+                {
+                    stateFlag.clear();
+                    // ToDo: better exception type
+                    throw std::exception("Incomplete task");
+                }
+                // ToDo: handle other state
+
+                auto result = std::get<States::Completed<TResult>>(state).Value;
+                stateFlag.clear();
+
+                return result;
+            }
+
+            TResult Result() &&
+            {
+                while (stateFlag.test_and_set()) { }
+
+                if (auto * error = std::get_if<States::Error>(&state))
+                {
+                    auto ex = error->Exception;
+                    stateFlag.clear();
+
+                    std::rethrow_exception(ex);
+                }
+                else if (std::holds_alternative<States::Created>(state))
+                {
+                    stateFlag.clear();
                     // ToDo: better exception type
                     throw std::exception("Incomplete task");
                 }
 
-                return std::get<States::Completed<TResult>>(result).Value;
-            }
+                auto result = std::get<States::Completed<TResult>>(std::move(state)).Value;
+                stateFlag.clear();
 
-            States::Completed<TResult>::rvalue_type Result() &&
-            {
-                if (auto * error = std::get_if<States::Error>(&result))
-                {
-                    std::rethrow_exception(error->Exception);
-                }
-                else if (std::holds_alternative<States::Initialized>(result))
-                {
-                    // ToDo: better exception type
-                    throw std::exception("Incomplete task");
-                }
-
-                return std::get<States::Completed<TResult>>(std::move(result)).Value;
+                return result;
             }
         };
 
@@ -176,35 +265,80 @@ namespace TaskSystem::inline v1_0
         class TaskPromise<void> final : public TaskPromiseBase
         {
         private:
-            std::variant<States::Initialized, States::Completed<void>, States::Error> result;
+            using state_type = std::variant<
+                States::Created,
+                States::Scheduled,
+                States::Running,
+                States::Completed<void>,
+                States::Canceled,
+                States::Error>;
+
+            alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
+            state_type state;
 
         public:
-            TaskPromise() noexcept : TaskPromiseBase(), result(States::Initialized{})
+            TaskPromise() noexcept : TaskPromiseBase(), state(States::Created{})
             { }
 
             Task<void> get_return_object() noexcept;
 
             void return_void() noexcept
             {
-                result = States::Completed<void>();
+                while (stateFlag.test_and_set()) { }
+
+                state = States::Completed<void>();
+
+                stateFlag.clear();
             }
 
             void unhandled_exception() noexcept
             {
-                result = States::Error{ std::current_exception() };
+                while (stateFlag.test_and_set()) { }
+
+                state = States::Error{ std::current_exception() };
+
+                stateFlag.clear();
+            }
+
+            TaskState State() const noexcept
+            {
+                while (stateFlag.test_and_set()) { }
+                auto index = state.index();
+                stateFlag.clear();
+
+                switch (index)
+                {
+                case 0u: return TaskState::Created;
+                case 1u: return TaskState::Scheduled;
+                case 2u: return TaskState::Running;
+                case 3u: return TaskState::Completed;
+                case 4u: return TaskState::Canceled;
+                case 5u: return TaskState::Error;
+                case 6u:
+                default: return TaskState::Unknown;
+                }
             }
 
             void Result()
             {
-                if (auto * error = std::get_if<States::Error>(&result))
+                while (stateFlag.test_and_set()) { }
+
+                if (auto * error = std::get_if<States::Error>(&state))
                 {
+                    auto ex = error->Exception;
+                    stateFlag.clear();
+
                     std::rethrow_exception(error->Exception);
                 }
-                else if (std::holds_alternative<States::Initialized>(result))
+                else if (std::holds_alternative<States::Created>(state))
                 {
+                    stateFlag.clear();
                     // ToDo: better exception type
                     throw std::exception("Incomplete task");
                 }
+                // ToDo: handle other states
+
+                stateFlag.clear();
             }
         };
 
@@ -213,37 +347,82 @@ namespace TaskSystem::inline v1_0
         {
         private:
             // Maybe: store with unique_ptr to call deleter if needed?
-            std::variant<States::Initialized, States::Completed<TResult *>, States::Error> result;
+            using state_type = std::variant<
+                States::Created,
+                States::Scheduled,
+                States::Running,
+                States::Completed<TResult *>,
+                States::Canceled,
+                States::Error>;
+
+            alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
+            state_type state;
 
         public:
-            TaskPromise() noexcept : TaskPromiseBase(), result(States::Initialized{})
+            TaskPromise() noexcept : TaskPromiseBase(), state(States::Created{})
             { }
 
             Task<TResult &> get_return_object() noexcept;
 
             void return_value(TResult & value) noexcept
             {
-                result = States::Completed<TResult *>{ std::addressof(value) };
+                while (stateFlag.test_and_set()) { }
+
+                state = States::Completed<TResult *>{ std::addressof(value) };
+
+                stateFlag.clear();
             }
 
             void unhandled_exception() noexcept
             {
-                result = States::Error{ std::current_exception() };
+                while (stateFlag.test_and_set()) { }
+
+                state = States::Error{ std::current_exception() };
+
+                stateFlag.clear();
+            }
+
+            TaskState State() const noexcept
+            {
+                while (stateFlag.test_and_set()) { }
+                auto index = state.index();
+                stateFlag.clear();
+
+                switch (index)
+                {
+                case 0u: return TaskState::Created;
+                case 1u: return TaskState::Scheduled;
+                case 2u: return TaskState::Running;
+                case 3u: return TaskState::Completed;
+                case 4u: return TaskState::Canceled;
+                case 5u: return TaskState::Error;
+                case 6u:
+                default: return TaskState::Unknown;
+                }
             }
 
             TResult & Result()
             {
-                if (auto * error = std::get_if<States::Error>(&result))
+                while (stateFlag.test_and_set()) { }
+
+                if (auto * error = std::get_if<States::Error>(&state))
                 {
+                    auto ex = error->Exception;
+                    stateFlag.clear();
+
                     std::rethrow_exception(error->Exception);
                 }
-                else if (std::holds_alternative<States::Initialized>(result))
+                else if (std::holds_alternative<States::Created>(state))
                 {
+                    stateFlag.clear();
                     // ToDo: better exception type
                     throw std::exception("Incomplete task");
                 }
 
-                return *std::get<States::Completed<TResult *>>(result).Value;
+                auto & result = *std::get<States::Completed<TResult *>>(state).Value;
+                stateFlag.clear();
+
+                return result;
             }
         };
 
@@ -415,6 +594,16 @@ namespace TaskSystem::inline v1_0
             return Detail::TaskAwaitableVoid{ handle };
         }
 
+        TaskState State() const noexcept
+        {
+            if (!handle)
+            {
+                return TaskState::Unknown;
+            }
+
+            return handle.promise().State();
+        }
+
         bool IsReady() const noexcept
         {
             return !handle || handle.done();
@@ -463,6 +652,8 @@ namespace TaskSystem::inline v1_0
         void ScheduleOn(ITaskScheduler & taskScheduler) &
         {
             handle.promise().TaskScheduler(&taskScheduler);
+            // handle.promise().SetScheduled();
+            taskScheduler.Schedule(handle);
         }
 
         [[nodiscard]] Task & ScheduleOn(ITaskScheduler & taskScheduler) &&
@@ -544,6 +735,16 @@ namespace TaskSystem::inline v1_0
             return Detail::TaskAwaitableMoveResult<TResult>{ handle };
         }
 
+        TaskState State() const noexcept
+        {
+            if (!handle)
+            {
+                return TaskState::Unknown;
+            }
+
+            return handle.promise().State();
+        }
+
         bool IsReady() const noexcept
         {
             return !handle || handle.done();
@@ -558,18 +759,31 @@ namespace TaskSystem::inline v1_0
                 throw std::exception("Nope");
             }
 
+            if (handle.promise().State() != TaskState::Created)
+            {
+                throw std::exception("Task is already scheduled, cannot be run");
+            }
+
             handle.resume();
 
-            return handle.promise().Result();
+            if constexpr (!std::is_void_v<TValue>)
+            {
+                return handle.promise().Result();
+            }
         }
 
         template <typename TValue = TResult>
-        TValue && Run() &&
+        TValue Run() &&
         {
             if (!handle || handle.done())
             {
                 // ToDo: better exception
                 throw std::exception("Nope");
+            }
+
+            if (handle.promise().State() != TaskState::Created)
+            {
+                throw std::exception("Task is already scheduled, cannot be run");
             }
 
             handle.resume();
@@ -615,11 +829,16 @@ namespace TaskSystem::inline v1_0
             return *this;
         }
 
-        // [[nodiscard]] Task & ContinueOn(TaskScheduler & taskScheduler) &&
-        // {
-        //     handle.promise().ContinuationTaskScheduler(taskScheduler);
-        //     return *this;
-        // }
+        void ContinueOn(ITaskScheduler & taskScheduler) &
+        {
+            handle.promise().ContinuationTaskScheduler(taskScheduler);
+        }
+
+        [[nodiscard]] Task & ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            handle.promise().ContinuationTaskScheduler(taskScheduler);
+            return *this;
+        }
     };
 
     namespace Detail
