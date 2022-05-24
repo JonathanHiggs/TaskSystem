@@ -17,6 +17,11 @@ namespace TaskSystem::v1_1
     {
         if (auto * handle = std::get_if<handle_type>(&item))
         {
+            if (!handle || handle->done())
+            {
+                // ToDo:
+            }
+            // Maybe: might want to set the executing scheduler in a way the promise can see it?
             handle->resume();
         }
         else if (auto * lambda = std::get_if<lambda_type>(&item))

@@ -60,9 +60,7 @@ namespace TaskSystem::v1_1::Tests
     TEST(TaskTests_v1_1, scheduleTaskTwiceThrows)
     {
         // Arrange
-        auto task = Task<int>::From([]() {
-            return 42;
-        });
+        auto task = Task<int>::From([]() { return 42; });
 
         auto scheduler = SynchronousTaskScheduler();
 
@@ -71,6 +69,55 @@ namespace TaskSystem::v1_1::Tests
 
         // Assert
         EXPECT_THROW(scheduler.Schedule(task), std::exception);
+    }
+
+    TEST(TaskTests_v1_1, taskScheduledOnDifferentScheduler)
+    {
+        // Arrange
+        auto scheduler1 = SynchronousTaskScheduler();
+        auto scheduler2 = SynchronousTaskScheduler();
+
+        auto task1Completed = false;
+        auto task1 = Task<int>::From([&]() {
+                         EXPECT_EQ(CurrentScheduler(), &scheduler1);
+                         task1Completed = true;
+                         return 42;
+                     })
+                         .ScheduleOn(scheduler1)
+                         .ContinueOn(scheduler2);
+
+        auto task2Started = false;
+        auto task2Completed = false;
+
+        auto task2 = [&]() -> Task<int> {
+            task2Started = true;
+            EXPECT_EQ(CurrentScheduler(), &scheduler2);
+            co_await task1;
+            // co_await task1.ScheduleOn(scheduler1).ContinueOn(scheduler2);
+            EXPECT_EQ(CurrentScheduler(), &scheduler2);
+            task2Completed = true;
+            co_return 42;
+        }();
+
+        scheduler2.Schedule(task2);
+
+        // Act & Assert
+        EXPECT_FALSE(task2Started);
+
+        scheduler2.Run();  // Run task2 up-to awaiting task1
+
+        EXPECT_TRUE(task2Started);
+        EXPECT_FALSE(task1Completed);
+        EXPECT_FALSE(task2Completed);
+
+        scheduler1.Run();  // Run task1, up-to scheduling task2 continuation on scheduler2
+
+        EXPECT_TRUE(task1Completed);
+        EXPECT_FALSE(task2Completed);
+
+        scheduler2.Run();  // Complete task2
+
+        EXPECT_TRUE(task2Completed);
     }
 
 }  // namespace TaskSystem::v1_1::Tests

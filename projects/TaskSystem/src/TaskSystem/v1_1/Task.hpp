@@ -33,6 +33,8 @@ namespace TaskSystem::v1_1
         {
         };
 
+        // ToDo: add Suspended
+
         template <typename TResult>
         struct Completed final
         {
@@ -43,6 +45,8 @@ namespace TaskSystem::v1_1
         struct Completed<void> final : std::monostate
         {
         };
+
+        // ToDo: add CompletedResultMoved
 
         struct Faulted final
         {
@@ -127,7 +131,7 @@ namespace TaskSystem::v1_1
                 }
 
                 auto * continuationScheduler = promise.ContinuationScheduler();
-                if (!continuationScheduler || continuationScheduler->IsWorkerThread())
+                if (!continuationScheduler || IsCurrentScheduler(continuationScheduler))
                 {
                     // Check: continuation state is set to running?
                     return continuation;
@@ -162,7 +166,9 @@ namespace TaskSystem::v1_1
             // Note: assumes the scheduler's lifetime will exceed the coroutine execution
             ITaskScheduler * taskScheduler = nullptr;
             ITaskScheduler * continuationScheduler = nullptr;
+
             // Maybe: might need more than the handle to set continuation scheduled or running
+            //        Handle, ExecutingScheduler, SetRunning, SetSuspended
             std::coroutine_handle<> continuation = nullptr;
 
             // Note: stateFlag is a spin lock to synchronise access to state, most likely there won't be many
@@ -365,6 +371,7 @@ namespace TaskSystem::v1_1
             }
         };
 
+        // ToDo: template <typename TResult, bool MoveResult>
         template <typename TResult>
         class TaskAwaitable final
         {
@@ -393,6 +400,15 @@ namespace TaskSystem::v1_1
                 }
 
                 handle.promise().Continuation(caller);
+
+                // Maybe: template on the caller promise type, can read the current scheduler out of the promise?
+                auto * taskScheduler = handle.promise().TaskScheduler();
+                if (taskScheduler && !IsCurrentScheduler(taskScheduler))
+                {
+                    taskScheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
+                    return std::noop_coroutine();
+                }
+
                 return handle;
             }
 
@@ -403,12 +419,14 @@ namespace TaskSystem::v1_1
                     throw std::exception("Cannot resume null handle");
                 }
 
+                // ToDo: move result from promise if template MoveResult
                 return handle.promise().Result();
             }
         };
 
     }  // namespace Detail
 
+    // Maybe: template on Promise and Await?
     template <typename TResult>
     class [[nodiscard]] Task final
     {
@@ -524,15 +542,33 @@ namespace TaskSystem::v1_1
             return handle.promise().Result();
         }
 
-        void ScheduleOn(ITaskScheduler & taskScheduler)
+        Task & ScheduleOn(ITaskScheduler & taskScheduler) &
         {
-            handle.promise().TaskScheduler(taskScheduler);
+            handle.promise().TaskScheduler(&taskScheduler);
+            return *this;
         }
 
-        void ContinueOn(ITaskScheduler & taskScheduler)
+        [[nodiscard]] Task && ScheduleOn(ITaskScheduler & taskScheduler) &&
         {
-            handle.promise().ContinuationScheduler(taskScheduler);
+            handle.promise().TaskScheduler(&taskScheduler);
+            return std::move(* this);
+        }
+
+        Task & ContinueOn(ITaskScheduler & taskScheduler) &
+        {
+            handle.promise().ContinuationScheduler(&taskScheduler);
+            return *this;
+        }
+
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            handle.promise().ContinuationScheduler(&taskScheduler);
+            return std::move(* this);
         }
     };
+
+    // ToDo: Task<void> specialization
+
+    // ToDo: Task<TResult &> specialization
 
 }  // namespace TaskSystem::v1_1

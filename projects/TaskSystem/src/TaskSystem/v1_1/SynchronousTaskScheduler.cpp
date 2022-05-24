@@ -4,6 +4,8 @@
 namespace TaskSystem::v1_1
 {
 
+    void SetCurrentScheduler(ITaskScheduler * scheduler);
+
     SynchronousTaskScheduler::SynchronousTaskScheduler() noexcept : id(std::this_thread::get_id())
     { }
 
@@ -19,6 +21,8 @@ namespace TaskSystem::v1_1
 
     void SynchronousTaskScheduler::Run()
     {
+        SetCurrentScheduler(this);
+
         while (!queue.empty())
         {
             auto item = std::move(queue.front());
@@ -31,6 +35,8 @@ namespace TaskSystem::v1_1
                 // ToDo: unhandled exception
             }
         }
+
+        SetCurrentScheduler(nullptr);
     }
 
 }  // namespace TaskScheduler::v1_1

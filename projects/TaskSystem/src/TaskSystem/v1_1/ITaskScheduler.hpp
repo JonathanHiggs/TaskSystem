@@ -16,4 +16,9 @@ namespace TaskSystem::v1_1
         virtual void Schedule(ScheduleItem && item) = 0;
     };
 
+    // ToDo: Move these to ExecutionContext class
+    ITaskScheduler * CurrentScheduler();
+
+    bool IsCurrentScheduler(ITaskScheduler * scheduler);
+
 }  // namespace TaskSystem::v1_1
