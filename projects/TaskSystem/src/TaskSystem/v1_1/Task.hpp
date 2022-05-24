@@ -130,6 +130,12 @@ namespace TaskSystem::v1_1
                     return std::noop_coroutine();
                 }
 
+                // Maybe: possible optimization - avoid schedule and rethrow
+                // if (promise.State() == TaskState::Error)
+                // {
+                //     continuation.SetError(promise.ExceptionPtr());
+                // }
+
                 auto * continuationScheduler = promise.ContinuationScheduler();
                 if (!continuationScheduler || IsCurrentScheduler(continuationScheduler))
                 {
@@ -207,6 +213,10 @@ namespace TaskSystem::v1_1
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
                 state = Faulted{ std::current_exception() };
                 stateFlag.clear(std::memory_order_release);
+
+                // Release any threads waiting for the result
+                completeFlag.test_and_set(std::memory_order_acquire);
+                completeFlag.notify_all();
             }
 
             template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
@@ -254,6 +264,7 @@ namespace TaskSystem::v1_1
                 }
             }
 
+            // Returns true if the method was able to atomically set the state to Scheduled; false otherwise
             bool TrySetScheduled() noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
@@ -270,6 +281,7 @@ namespace TaskSystem::v1_1
                 return true;
             }
 
+            // Returns true if the method was able to atomically set the state to Running; false otherwise
             bool TrySetRunning() noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
@@ -280,7 +292,7 @@ namespace TaskSystem::v1_1
                     return false;
                 }
 
-                state = Scheduled{};
+                state = Running{};
                 stateFlag.clear(std::memory_order_release);
 
                 return true;
@@ -394,10 +406,12 @@ namespace TaskSystem::v1_1
 
             std::coroutine_handle<> await_suspend(std::coroutine_handle<> caller) noexcept
             {
-                if (!handle || handle.done())
+                if (!handle || handle.done() || handle.promise().State().IsCompleted())
                 {
                     return caller;
                 }
+
+                // ToDo: caller.promise().SetSuspended();
 
                 handle.promise().Continuation(caller);
 
@@ -405,7 +419,16 @@ namespace TaskSystem::v1_1
                 auto * taskScheduler = handle.promise().TaskScheduler();
                 if (taskScheduler && !IsCurrentScheduler(taskScheduler))
                 {
-                    taskScheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
+                    if (handle.promise().TrySetScheduled())
+                    {
+                        taskScheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
+                    }
+                    return std::noop_coroutine();
+                }
+
+                if (!handle.promise().TrySetRunning())
+                {
+                    // ToDo: should never happen
                     return std::noop_coroutine();
                 }
 
@@ -551,7 +574,7 @@ namespace TaskSystem::v1_1
         [[nodiscard]] Task && ScheduleOn(ITaskScheduler & taskScheduler) &&
         {
             handle.promise().TaskScheduler(&taskScheduler);
-            return std::move(* this);
+            return std::move(*this);
         }
 
         Task & ContinueOn(ITaskScheduler & taskScheduler) &
@@ -563,7 +586,7 @@ namespace TaskSystem::v1_1
         [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
         {
             handle.promise().ContinuationScheduler(&taskScheduler);
-            return std::move(* this);
+            return std::move(*this);
         }
     };
 

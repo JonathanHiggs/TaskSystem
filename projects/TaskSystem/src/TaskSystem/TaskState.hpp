@@ -18,7 +18,7 @@ namespace TaskSystem
             Scheduled,
             Running,
             Completed,
-            Canceled,
+            Canceled, // ToDo: remove - not used
             Error,  // ToDo: rename Faulted
             Unknown
         };
@@ -30,12 +30,24 @@ namespace TaskSystem
         constexpr TaskState(ValueType value) : value(value)
         { }
 
-        [[nodiscard]] constexpr operator ValueType() const
+        [[nodiscard]] constexpr operator ValueType() const noexcept
         {
             return value;
         }
 
-        [[nodiscard]] constexpr std::string_view ToStringView() const
+        [[nodiscard]] constexpr bool IsCompleted() const noexcept
+        {
+            switch (value)
+            {
+            case Completed:
+            case Canceled:
+            case Error: return true;
+
+            default: return false;
+            }
+        }
+
+        [[nodiscard]] constexpr std::string_view ToStringView() const noexcept
         {
             switch (value)
             {
@@ -52,7 +64,7 @@ namespace TaskSystem
             }
         }
 
-        [[nodiscard]] constexpr std::string ToString() const
+        [[nodiscard]] constexpr std::string ToString() const noexcept
         {
             return std::string(ToStringView());
         }
