@@ -17,9 +17,10 @@ namespace TaskSystem
             Created,
             Scheduled,
             Running,
+            Suspended,
             Completed,
-            Canceled, // ToDo: remove - not used
-            Error,  // ToDo: rename Faulted
+            Cancelled,  // ToDo: remove - not used
+            Error,     // ToDo: rename Faulted
             Unknown
         };
 
@@ -40,7 +41,7 @@ namespace TaskSystem
             switch (value)
             {
             case Completed:
-            case Canceled:
+            case Cancelled:
             case Error: return true;
 
             default: return false;
@@ -55,8 +56,9 @@ namespace TaskSystem
             case Created:   return "Created";
             case Scheduled: return "Scheduled";
             case Running:   return "Running";
+            case Suspended: return "Suspended";
             case Completed: return "Completed";
-            case Canceled:  return "Canceled";
+            case Cancelled:  return "Cancelled";
             case Error:     return "Error";
             case Unknown:
             default:        return "Unknown";
@@ -70,10 +72,10 @@ namespace TaskSystem
         }
     };
 
-    static constexpr std::array<TaskState, 7u> TaskStates{ TaskState::Created,  TaskState::Scheduled,
-                                                           TaskState::Running,  TaskState::Completed,
-                                                           TaskState::Canceled, TaskState::Error,
-                                                           TaskState::Unknown };
+    static constexpr std::array<TaskState, 8u> TaskStates{ TaskState::Created,   TaskState::Scheduled,
+                                                           TaskState::Running,   TaskState::Suspended,
+                                                           TaskState::Completed, TaskState::Cancelled,
+                                                           TaskState::Error,     TaskState::Unknown };
 
     std::ostream & operator<<(std::ostream & os, TaskState const value);
 

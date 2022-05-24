@@ -9,4 +9,4 @@ namespace TaskSystem
         return os << value.ToStringView();
     }
 
-}
+}  // namespace TaskSystem

@@ -33,7 +33,9 @@ namespace TaskSystem::v1_1
         {
         };
 
-        // ToDo: add Suspended
+        struct Suspended final : std::monostate
+        {
+        };
 
         template <typename TResult>
         struct Completed final
@@ -46,7 +48,9 @@ namespace TaskSystem::v1_1
         {
         };
 
-        // ToDo: add CompletedResultMoved
+        // Maybe: CompletedResultMoved
+
+        // Maybe: Cancelled?
 
         struct Faulted final
         {
@@ -165,7 +169,7 @@ namespace TaskSystem::v1_1
             using handle_type = std::coroutine_handle<promise_type>;
 
         private:
-            using state_type = std::variant<Created, Scheduled, Running, Completed<TResult>, Faulted>;
+            using state_type = std::variant<Created, Scheduled, Running, Suspended, Completed<TResult>, Faulted>;
 
             alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
 
@@ -258,8 +262,9 @@ namespace TaskSystem::v1_1
                 case 0u: return TaskState::Created;
                 case 1u: return TaskState::Scheduled;
                 case 2u: return TaskState::Running;
-                case 3u: return TaskState::Completed;
-                case 4u: return TaskState::Error;
+                case 3u: return TaskState::Suspended;
+                case 4u: return TaskState::Completed;
+                case 5u: return TaskState::Error;
                 default: return TaskState::Unknown;
                 }
             }
@@ -269,7 +274,7 @@ namespace TaskSystem::v1_1
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-                if (!StateIsOneOf<Created>())
+                if (!StateIsOneOf<Created, Suspended>())
                 {
                     stateFlag.clear(std::memory_order_release);
                     return false;
@@ -286,13 +291,29 @@ namespace TaskSystem::v1_1
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-                if (!StateIsOneOf<Created, Scheduled>())
+                if (!StateIsOneOf<Created, Scheduled, Suspended>())
                 {
                     stateFlag.clear(std::memory_order_release);
                     return false;
                 }
 
                 state = Running{};
+                stateFlag.clear(std::memory_order_release);
+
+                return true;
+            }
+
+            // Returns true if the method was able to atomically set the state to Suspended; false otherwise
+            bool TrySetSuspended() noexcept
+            {
+                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+
+                if (!StateIsOneOf<Running>()) {
+                    stateFlag.clear(std::memory_order_release);
+                    return false;
+                }
+
+                state = Suspended{};
                 stateFlag.clear(std::memory_order_release);
 
                 return true;
@@ -332,7 +353,7 @@ namespace TaskSystem::v1_1
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-                if (StateIsOneOf<Created, Scheduled, Running>())
+                if (StateIsOneOf<Created, Scheduled, Running, Suspended>())
                 {
                     stateFlag.clear(std::memory_order_release);
                     throw std::exception("Task is not complete");
@@ -355,7 +376,7 @@ namespace TaskSystem::v1_1
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-                if (StateIsOneOf<Created, Scheduled, Running>())
+                if (StateIsOneOf<Created, Scheduled, Running, Suspended>())
                 {
                     stateFlag.clear(std::memory_order_release);
                     throw std::exception("Task is not complete");
@@ -404,14 +425,19 @@ namespace TaskSystem::v1_1
                 return false;
             }
 
-            std::coroutine_handle<> await_suspend(std::coroutine_handle<> caller) noexcept
+            template <typename TPromise>
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> caller) noexcept
             {
                 if (!handle || handle.done() || handle.promise().State().IsCompleted())
                 {
                     return caller;
                 }
 
-                // ToDo: caller.promise().SetSuspended();
+                if (!caller.promise().TrySetSuspended())
+                {
+                    // ToDo: what to do here?
+                    assert(false);
+                }
 
                 handle.promise().Continuation(caller);
 
@@ -426,7 +452,7 @@ namespace TaskSystem::v1_1
                     return std::noop_coroutine();
                 }
 
-                if (!handle.promise().TrySetRunning())
+                if (!handle.promise().TrySetScheduled())
                 {
                     // ToDo: should never happen
                     return std::noop_coroutine();

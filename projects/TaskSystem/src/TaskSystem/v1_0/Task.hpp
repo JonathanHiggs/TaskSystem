@@ -229,7 +229,7 @@ namespace TaskSystem::inline v1_0
                 case 1u: return TaskState::Scheduled;
                 case 2u: return TaskState::Running;
                 case 3u: return TaskState::Completed;
-                case 4u: return TaskState::Canceled;
+                case 4u: return TaskState::Cancelled;
                 case 5u: return TaskState::Error;
                 case 6u:
                 default: return TaskState::Unknown;
@@ -380,7 +380,7 @@ namespace TaskSystem::inline v1_0
                 case 1u: return TaskState::Scheduled;
                 case 2u: return TaskState::Running;
                 case 3u: return TaskState::Completed;
-                case 4u: return TaskState::Canceled;
+                case 4u: return TaskState::Cancelled;
                 case 5u: return TaskState::Error;
                 case 6u:
                 default: return TaskState::Unknown;
@@ -504,7 +504,7 @@ namespace TaskSystem::inline v1_0
                 case 1u: return TaskState::Scheduled;
                 case 2u: return TaskState::Running;
                 case 3u: return TaskState::Completed;
-                case 4u: return TaskState::Canceled;
+                case 4u: return TaskState::Cancelled;
                 case 5u: return TaskState::Error;
                 case 6u:
                 default: return TaskState::Unknown;
