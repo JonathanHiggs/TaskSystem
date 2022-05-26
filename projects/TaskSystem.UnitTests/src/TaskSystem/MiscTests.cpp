@@ -75,7 +75,7 @@ namespace TaskSystem::Tests
         Log("[main] terminating\n");
     }
 
-    TEST(MiscTests, sizeOfStuff)
+    TEST(MiscTests, DISABLED_sizeOfStuff)
     {
         EXPECT_EQ(sizeof(void *), 8u);
         EXPECT_EQ(sizeof(std::atomic_flag), 8u);

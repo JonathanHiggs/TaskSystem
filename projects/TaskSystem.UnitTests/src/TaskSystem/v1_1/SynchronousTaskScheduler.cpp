@@ -28,4 +28,37 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(completed2);
     }
 
+    static bool completed = false;
+
+    void SetCompleted()
+    {
+        completed = true;
+    }
+
+    TEST(SynchronousTaskSchedulerTests_v1_1, runWithFunctionPointer)
+    {
+        // Arrange
+        auto scheduler = SynchronousTaskScheduler();
+
+        scheduler.Schedule(ScheduleItem(SetCompleted));
+
+        // Act
+        scheduler.Run();
+
+        // Assert
+        EXPECT_TRUE(completed);
+    }
+
+    TEST(SynchronousTaskSchedulerTests_v1_1, isWorkingThread)
+    {
+        // Arrange
+        auto scheduler = SynchronousTaskScheduler();
+        auto isWorkerThread 
+        auto task = [&]() { worker }
+
+        // Act & Assert
+        EXPECT_FALSE(scheduler.IsWorkerThread());
+
+    }
+
 }

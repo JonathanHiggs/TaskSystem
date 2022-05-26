@@ -6,12 +6,12 @@ namespace TaskSystem::v1_1
 
     void SetCurrentScheduler(ITaskScheduler * scheduler);
 
-    SynchronousTaskScheduler::SynchronousTaskScheduler() noexcept : id(std::this_thread::get_id())
+    SynchronousTaskScheduler::SynchronousTaskScheduler() noexcept : id(std::nullopt)
     { }
 
     bool SynchronousTaskScheduler::IsWorkerThread() const noexcept
     {
-        return std::this_thread::get_id() == id;
+        return id && *id == std::this_thread::get_id();
     }
 
     void SynchronousTaskScheduler::Schedule(ScheduleItem && item)
@@ -21,6 +21,7 @@ namespace TaskSystem::v1_1
 
     void SynchronousTaskScheduler::Run()
     {
+        id = std::this_thread::get_id();
         SetCurrentScheduler(this);
 
         while (!queue.empty())
@@ -36,6 +37,7 @@ namespace TaskSystem::v1_1
             }
         }
 
+        id = std::nullopt;
         SetCurrentScheduler(nullptr);
     }
 

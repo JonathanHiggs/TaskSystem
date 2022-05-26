@@ -4,6 +4,11 @@
 
 #include <gtest/gtest.h>
 
+#include <thread>
+
+
+using namespace std::chrono_literals;
+
 
 namespace TaskSystem::v1_1::Tests
 {
@@ -300,8 +305,70 @@ namespace TaskSystem::v1_1::Tests
 
     // await a completed task
 
-    // task wait continues on result
-    // task wait continues on exception
+    TEST(TaskTests_v1_1, waitContinuesOnTaskResult)
+    {
+        // Arrange
+        auto expected = 42;
+        auto waiting = false;
+        auto completed = false;
+
+        auto scheduler = SynchronousTaskScheduler();
+        auto innerTask = [&]() -> Task<int> { 
+            std::this_thread::sleep_for(2ms);
+            co_return expected; 
+        }();
+
+        // Act
+        std::thread waiter([&]() {
+            waiting = true;
+            innerTask.Wait();
+            completed = true;
+        });
+
+        std::jthread worker([&]() {
+            scheduler.Schedule(innerTask);
+            scheduler.Run();
+        });
+
+        waiter.join();
+
+        // Assert
+        EXPECT_TRUE(waiting);
+        EXPECT_TRUE(completed);
+    }
+
+    TEST(TaskTests_v1_1, waitContinuesOnTaskException)
+    {
+        // Arrange
+        auto expected = 42;
+        auto waiting = false;
+        auto completed = false;
+
+        auto scheduler = SynchronousTaskScheduler();
+        auto innerTask = [&]() -> Task<int> { 
+            std::this_thread::sleep_for(2ms);
+            throw std::exception();
+            co_return expected;
+        }();
+
+        // Act
+        std::thread waiter([&]() {
+            waiting = true;
+            innerTask.Wait();
+            completed = true;
+        });
+
+        std::jthread worker([&]() {
+            scheduler.Schedule(innerTask);
+            scheduler.Run();
+        });
+
+        waiter.join();
+
+        // Assert
+        EXPECT_TRUE(waiting);
+        EXPECT_TRUE(completed);
+    }
 
     // tracked copy and move number
 

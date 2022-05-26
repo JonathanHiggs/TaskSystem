@@ -12,7 +12,7 @@ using TaskSystem::Utils::CopyResult;
 namespace TaskSystem::v1_0::Tests
 {
 
-    TEST(SynchronousTaskSchedulerTests_v1_0, scheduledTaskCompletes)
+    TEST(SynchronousTaskSchedulerTests_v1_0, DISABLED_scheduledTaskCompletes)
     {
         // Arrange
         auto completed = false;
@@ -28,7 +28,7 @@ namespace TaskSystem::v1_0::Tests
         EXPECT_TRUE(completed);
     }
 
-    TEST(SynchronousTaskSchedulerTests_v1_0, taskScheduleOnCompletes)
+    TEST(SynchronousTaskSchedulerTests_v1_0, DISABLED_taskScheduleOnCompletes)
     {
         // Arrange
         auto scheduler = SynchronousTaskScheduler();
