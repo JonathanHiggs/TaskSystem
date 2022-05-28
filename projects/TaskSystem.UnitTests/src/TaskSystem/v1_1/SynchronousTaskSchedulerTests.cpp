@@ -1,5 +1,7 @@
 #include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
 
+#include <TaskSystem/v1_1/Task.hpp>
+
 #include <gtest/gtest.h>
 
 
@@ -52,13 +54,20 @@ namespace TaskSystem::v1_1::Tests
     TEST(SynchronousTaskSchedulerTests_v1_1, isWorkingThread)
     {
         // Arrange
+        auto isWorkerThread = false;
         auto scheduler = SynchronousTaskScheduler();
-        auto isWorkerThread 
-        auto task = [&]() { worker }
+        auto task = [&]() -> Task<int> { 
+            isWorkerThread = scheduler.IsWorkerThread();
+            co_return 42;
+        }();
+        scheduler.Schedule(task);
 
-        // Act & Assert
+        // Act
+        scheduler.Run();
+
+        // Assert
         EXPECT_FALSE(scheduler.IsWorkerThread());
-
+        EXPECT_TRUE(isWorkerThread);
     }
 
-}
+}  // namespace TaskSystem::v1_1::Tests

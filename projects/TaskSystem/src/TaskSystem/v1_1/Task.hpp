@@ -15,7 +15,7 @@
 namespace TaskSystem::v1_1
 {
 
-    template <typename TResult>
+    template <typename TResult, typename TPromise>
     class Task;
 
     namespace Detail
@@ -171,7 +171,13 @@ namespace TaskSystem::v1_1
         private:
             using state_type = std::variant<Created, Scheduled, Running, Suspended, Completed<TResult>, Faulted>;
 
+#pragma warning(disable : 4324)
+            // Disable: warning C4324: structure was padded due to alignment specifier
+            // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
+            
+            alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
             alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
+#pragma warning(default : 4234)
 
             // Note: assumes the scheduler's lifetime will exceed the coroutine execution
             ITaskScheduler * taskScheduler = nullptr;
@@ -181,13 +187,6 @@ namespace TaskSystem::v1_1
             //        Handle, ExecutingScheduler, SetRunning, SetSuspended
             std::coroutine_handle<> continuation = nullptr;
 
-            // Note: stateFlag is a spin lock to synchronise access to state, most likely there won't be many
-            //       threads contending for access so it should be nice and fast
-#pragma warning(disable : 4324)
-            // Disable: warning C4324: structure was padded due to alignment specifier
-            // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
-            alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
-#pragma warning(default : 4234)
             state_type state = Created{};
 
             template <typename... Ts>
@@ -197,9 +196,9 @@ namespace TaskSystem::v1_1
             }
 
         public:
-            Task<TResult> get_return_object() noexcept
+            Task<TResult, TaskPromise> get_return_object() noexcept
             {
-                return Task<TResult>(handle_type::from_promise(*this));
+                return Task<TResult, TaskPromise>(handle_type::from_promise(*this));
             }
 
             TaskInitialSuspend<promise_type> initial_suspend() noexcept
@@ -251,7 +250,7 @@ namespace TaskSystem::v1_1
                 completeFlag.notify_all();
             }
 
-            TaskState State() const noexcept
+            [[nodiscard]] TaskState State() const noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
                 auto index = state.index();
@@ -270,7 +269,7 @@ namespace TaskSystem::v1_1
             }
 
             // Returns true if the method was able to atomically set the state to Scheduled; false otherwise
-            bool TrySetScheduled() noexcept
+            [[nodiscard]] bool TrySetScheduled() noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
@@ -287,7 +286,7 @@ namespace TaskSystem::v1_1
             }
 
             // Returns true if the method was able to atomically set the state to Running; false otherwise
-            bool TrySetRunning() noexcept
+            [[nodiscard]] bool TrySetRunning() noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
@@ -304,11 +303,12 @@ namespace TaskSystem::v1_1
             }
 
             // Returns true if the method was able to atomically set the state to Suspended; false otherwise
-            bool TrySetSuspended() noexcept
+            [[nodiscard]] bool TrySetSuspended() noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-                if (!StateIsOneOf<Running>()) {
+                if (!StateIsOneOf<Running>())
+                {
                     stateFlag.clear(std::memory_order_release);
                     return false;
                 }
@@ -319,7 +319,7 @@ namespace TaskSystem::v1_1
                 return true;
             }
 
-            std::coroutine_handle<> Continuation() const noexcept
+            [[nodiscard]] std::coroutine_handle<> Continuation() const noexcept
             {
                 return continuation;
             }
@@ -329,7 +329,7 @@ namespace TaskSystem::v1_1
                 continuation = value;
             }
 
-            ITaskScheduler * ContinuationScheduler() const noexcept
+            [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept
             {
                 return continuationScheduler;
             }
@@ -339,7 +339,7 @@ namespace TaskSystem::v1_1
                 continuationScheduler = value;
             }
 
-            ITaskScheduler * TaskScheduler() const noexcept
+            [[nodiscard]] ITaskScheduler * TaskScheduler() const noexcept
             {
                 return taskScheduler;
             }
@@ -395,17 +395,15 @@ namespace TaskSystem::v1_1
                 return result;
             }
 
-            // ToDo: TryResult
-
             void Wait() const noexcept
             {
-                // Waits for return_value to set completeFlag true
+                // Waits for return_value or unhandled_exception to set completeFlag to true
                 completeFlag.wait(false, std::memory_order_acquire);
             }
         };
 
         // ToDo: template <typename TResult, bool MoveResult>
-        template <typename TResult>
+        template <typename TResult, bool MoveResult>
         class TaskAwaitable final
         {
         public:
@@ -468,31 +466,34 @@ namespace TaskSystem::v1_1
                     throw std::exception("Cannot resume null handle");
                 }
 
-                // ToDo: move result from promise if template MoveResult
-                return handle.promise().Result();
+                if constexpr (MoveResult)
+                {
+                    return std::move(handle.promise()).Result();
+                }
+                else
+                {
+                    return handle.promise().Result();
+                }
             }
         };
 
     }  // namespace Detail
 
-    // Maybe: template on Promise and Await?
-    template <typename TResult>
+    template <typename TResult, typename TPromise = Detail::TaskPromise<TResult>>
     class [[nodiscard]] Task final
     {
     public:
         using value_type = TResult;
-        using promise_type = Detail::TaskPromise<value_type>;
+        using promise_type = TPromise;
         using handle_type = std::coroutine_handle<promise_type>;
 
     private:
         handle_type handle;
 
-        friend class promise_type;
-
+    public:
         explicit Task(handle_type handle) noexcept : handle(handle)
         { }
 
-    public:
         Task(Task const &) = delete;
         Task & operator=(Task const &) = delete;
 
@@ -557,10 +558,14 @@ namespace TaskSystem::v1_1
             co_return std::forward<TFunc>(func)();
         }
 
-        Detail::TaskAwaitable<TResult> operator co_await() const noexcept
+        auto operator co_await() const & noexcept
         {
-            // ToDo: lvalue / rvalue versions
-            return Detail::TaskAwaitable<TResult>(handle);
+            return Detail::TaskAwaitable<TResult, false>(handle);
+        }
+
+        auto operator co_await() const && noexcept
+        {
+            return Detail::TaskAwaitable<TResult, true>(handle);
         }
 
         [[nodiscard]] TaskState State() const noexcept
@@ -584,7 +589,7 @@ namespace TaskSystem::v1_1
             handle.promise().Wait();
         }
 
-        TResult Result()
+        [[nodiscard]] TResult Result()
         {
             // ToDo: lvalue / rvalue versions
             Wait();

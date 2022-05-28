@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 
 namespace TaskSystem::v1_1::Tests
 {
-
+#pragma warning(disable : 4834)
     TEST(TaskTests_v1_1, taskLambda)
     {
         // Arrange
@@ -372,4 +372,5 @@ namespace TaskSystem::v1_1::Tests
 
     // tracked copy and move number
 
+#pragma warning(default : 4834)
 }  // namespace TaskSystem::v1_1::Tests
