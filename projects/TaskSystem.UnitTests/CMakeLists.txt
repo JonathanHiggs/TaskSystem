@@ -20,6 +20,7 @@ target_compile_options(tasksystem_unittests PRIVATE
     "/wd4099"                       # exclude: type first seen using #
     "/wd4100"                       # exclude: unreferenced parameter
     "/wd4201"                       # exclude: nameless struct/union
+    "/wd4834"                       # exclude: discarding a nodiscard value
     "$<$<CONFIG:DEBUG>:/Oi>"        # replace calls with intrinsics
     "$<$<CONFIG:DEBUG>:/Zi>"        # generate complete debug info
     "$<$<CONFIG:DEBUG>:/JMC>"       # just my code

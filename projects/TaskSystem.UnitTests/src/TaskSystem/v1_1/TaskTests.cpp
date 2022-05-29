@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 
 namespace TaskSystem::v1_1::Tests
 {
-#pragma warning(disable : 4834)
+
     TEST(TaskTests_v1_1, taskLambda)
     {
         // Arrange
@@ -313,9 +313,9 @@ namespace TaskSystem::v1_1::Tests
         auto completed = false;
 
         auto scheduler = SynchronousTaskScheduler();
-        auto innerTask = [&]() -> Task<int> { 
+        auto innerTask = [&]() -> Task<int> {
             std::this_thread::sleep_for(2ms);
-            co_return expected; 
+            co_return expected;
         }();
 
         // Act
@@ -345,7 +345,7 @@ namespace TaskSystem::v1_1::Tests
         auto completed = false;
 
         auto scheduler = SynchronousTaskScheduler();
-        auto innerTask = [&]() -> Task<int> { 
+        auto innerTask = [&]() -> Task<int> {
             std::this_thread::sleep_for(2ms);
             throw std::exception();
             co_return expected;
@@ -372,5 +372,4 @@ namespace TaskSystem::v1_1::Tests
 
     // tracked copy and move number
 
-#pragma warning(default : 4834)
 }  // namespace TaskSystem::v1_1::Tests

@@ -160,6 +160,7 @@ namespace TaskSystem::v1_1
 
         inline constexpr size_t CacheLineSize = std::hardware_destructive_interference_size;
 
+        // Maybe: template on the exception type rather than assuming exception_ptr?
         template <typename TResult>
         class TaskPromise final
         {
@@ -326,6 +327,7 @@ namespace TaskSystem::v1_1
 
             void Continuation(std::coroutine_handle<> value)
             {
+                // Maybe: lock and fail if state is Completed or Faulted?
                 continuation = value;
             }
 
@@ -624,5 +626,9 @@ namespace TaskSystem::v1_1
     // ToDo: Task<void> specialization
 
     // ToDo: Task<TResult &> specialization
+
+    // Maybe: Task::FromResult() task with no coroutine/promise
+    // template <typename TResult>
+    // Task<TResult, void>
 
 }  // namespace TaskSystem::v1_1

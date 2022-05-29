@@ -13,11 +13,12 @@ namespace TaskSystem::v1_1
     namespace Detail
     {
 
+        // Maybe: template on the exception type rather than assuming exception_ptr?
         template <typename TResult>
         class TaskCompletionSourcePromise final
         {
         private:
-            using state_type = std::variant<Created, Completed<TResult>, Faulted>;
+            using state_type = std::variant<Created, Suspended, Completed<TResult>, Faulted>;
 
 #pragma warning(disable : 4324)
             // Disable: warning C4324: structure was padded due to alignment specifier
@@ -38,6 +39,8 @@ namespace TaskSystem::v1_1
             }
 
         public:
+            // ToDo: handle delete promise while thread is waiting
+
             [[nodiscard]] TaskState State() const noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
@@ -47,8 +50,9 @@ namespace TaskSystem::v1_1
                 switch (index)
                 {
                 case 0u: return TaskState::Created;
-                case 1u: return TaskState::Completed;
-                case 2u: return TaskState::Error;
+                case 1u: return TaskState::Suspended;
+                case 2u: return TaskState::Completed;
+                case 3u: return TaskState::Error;
                 default: return TaskState::Unknown;
                 }
             }
@@ -119,8 +123,17 @@ namespace TaskSystem::v1_1
                 return result;
             }
 
-            template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
-            [[nodiscard]] bool TrySetResult(TValue && value) noexcept
+            constexpr bool TrySetScheduled() const noexcept
+            {
+                return false;
+            }
+
+            constexpr bool TrySetRunning() const noexcept
+            {
+                return false;
+            }
+
+            bool TrySetSuspended() noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
@@ -130,7 +143,24 @@ namespace TaskSystem::v1_1
                     return false;
                 }
 
-                if constexpr (std::is_nothrow_constructible_v<TResult, TValue &&>)
+                state = Suspended{};
+                stateFlag.clear(std::memory_order_release);
+
+                return true;
+            }
+
+            template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
+            [[nodiscard]] bool TrySetResult(TValue && value) noexcept
+            {
+                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+
+                if (!StateIsOneOf<Created, Suspended>())
+                {
+                    stateFlag.clear(std::memory_order_release);
+                    return false;
+                }
+
+                if constexpr (std::is_nothrow_constructible_v<TResult, decltype(value)>)
                 {
                     state = Completed<TResult>{ std::forward<TValue>(value) };
                 }
@@ -148,7 +178,10 @@ namespace TaskSystem::v1_1
 
                 stateFlag.clear(std::memory_order_release);
 
-                continuationScheduler->Schedule(continuation);
+                if (continuation && continuationScheduler)
+                {
+                    continuationScheduler->Schedule(continuation);
+                }
 
                 // Release any threads waiting for the result
                 completeFlag.test_and_set(std::memory_order_acquire);
@@ -161,7 +194,7 @@ namespace TaskSystem::v1_1
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-                if (!StateIsOneOf<Created>())
+                if (!StateIsOneOf<Created, Suspended>())
                 {
                     stateFlag.clear(std::memory_order_release);
                     return false;
@@ -171,7 +204,10 @@ namespace TaskSystem::v1_1
 
                 stateFlag.clear(std::memory_order_release);
 
-                continuationScheduler->Schedule(continuation);
+                if (continuation && continuationScheduler)
+                {
+                    continuationScheduler->Schedule(continuation);
+                }
 
                 // Release any threads waiting for the result
                 completeFlag.test_and_set(std::memory_order_acquire);
@@ -206,6 +242,7 @@ namespace TaskSystem::v1_1
                 return false;
             }
 
+            // ToDo: Promise concept
             template <typename TPromise>
             std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> caller)
             {
@@ -217,8 +254,15 @@ namespace TaskSystem::v1_1
                 if (!caller.promise().TrySetSuspended())
                 {
                     // ToDo: what to do here?
-                    assert(false);
+                    throw std::exception("Unable to set caller promise to suspend state");
                 }
+
+                if (!promise.TrySetSuspended())
+                {
+                    return caller;
+                }
+                // Note: possible data race if promise is set Complete or Faulted between TrySetSuspend and 
+                //       setting continuations
 
                 // Suspend the caller and don't schedule anything new
                 promise.Continuation(caller);
@@ -256,7 +300,7 @@ namespace TaskSystem::v1_1
         explicit Task(promise_type & promise) noexcept : promise(promise)
         { }
 
-        auto operator co_await() const& noexcept
+        auto operator co_await() const & noexcept
         {
             return Detail::TaskCompletionSourceAwaitable<TResult, false>(promise);
         }
@@ -290,21 +334,56 @@ namespace TaskSystem::v1_1
         Detail::TaskCompletionSourcePromise<TResult> promise;
 
     public:
+        TaskCompletionSource() noexcept = default;
+
+        TaskCompletionSource(TaskCompletionSource const &) = delete;
+        TaskCompletionSource & operator=(TaskCompletionSource const &) = delete;
+
+        TaskCompletionSource(TaskCompletionSource &&) = delete;
+        TaskCompletionSource & operator=(TaskCompletionSource &&) = delete;
+
         [[nodiscard]] ::TaskSystem::v1_1::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> Task()
         {
             return ::TaskSystem::v1_1::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>>(promise);
         }
 
         template <typename TValue, std::enable_if_t<std::is_convertible_v<TValue &&, TResult>> * = nullptr>
-        bool TrySetResult(TValue && value)
+        [[nodiscard]] bool
+        TrySetResult(TValue && value) noexcept(std::is_nothrow_constructible_v<TResult, decltype(value)>)
         {
             return promise.TrySetResult(std::forward<TValue>(value));
         }
 
-        template <typename TException>
-        bool TrySetException(TException && exception)
+        template <typename TValue, std::enable_if_t<std::is_convertible_v<TValue &&, TResult>> * = nullptr>
+        void SetResult(TValue && value)
         {
-            return promise.TrySetException(std::forward<TException>(exception));
+            auto result = TrySetResult(std::forward<TValue>(value));
+            if (!result)
+            {
+                throw std::exception("Unable to set value");
+            }
+        }
+
+        template <typename TException, std::enable_if_t<!std::is_same_v<TException, std::exception_ptr>> * = nullptr>
+        [[nodiscard]] bool TrySetException(TException && exception) noexcept
+        {
+            return promise.TrySetException(std::make_exception_ptr(std::forward<TException>(exception)));
+        }
+
+        template <typename TException, std::enable_if_t<std::is_same_v<TException, std::exception_ptr>> * = nullptr>
+        [[nodiscard]] bool TrySetException(std::exception_ptr exception) noexcept
+        {
+            return promise.TrySetException(exception);
+        }
+
+        template <typename TException>
+        void SetException(TException && exception)
+        {
+            auto result = TrySetException(std::forward<TException>(exception));
+            if (!result)
+            {
+                throw std::exception("Unable to set exception");
+            }
         }
     };
 
