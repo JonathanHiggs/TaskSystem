@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TaskSystem/v1_1/Task.hpp>
+#include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 
 #include <coroutine>
 #include <exception>

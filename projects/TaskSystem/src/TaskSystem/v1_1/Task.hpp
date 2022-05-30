@@ -3,6 +3,8 @@
 #include <TaskSystem/TaskState.hpp>
 #include <TaskSystem/v1_1/ITaskScheduler.hpp>
 #include <TaskSystem/v1_1/ScheduleItem.hpp>
+#include <TaskSystem/v1_1/Detail/Continuation.hpp>
+#include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 
 #include <atomic>
 #include <cassert>
@@ -20,42 +22,6 @@ namespace TaskSystem::v1_1
 
     namespace Detail
     {
-
-        struct Created final : std::monostate
-        {
-        };
-
-        struct Scheduled final : std::monostate
-        {
-        };
-
-        struct Running final : std::monostate
-        {
-        };
-
-        struct Suspended final : std::monostate
-        {
-        };
-
-        template <typename TResult>
-        struct Completed final
-        {
-            TResult Value;
-        };
-
-        template <>
-        struct Completed<void> final : std::monostate
-        {
-        };
-
-        // Maybe: CompletedResultMoved
-
-        // Maybe: Cancelled?
-
-        struct Faulted final
-        {
-            std::exception_ptr Exception;
-        };
 
         template <typename TPromise>
         class TaskInitialSuspend final
@@ -140,16 +106,21 @@ namespace TaskSystem::v1_1
                 //     continuation.SetError(promise.ExceptionPtr());
                 // }
 
-                auto * continuationScheduler = promise.ContinuationScheduler();
-                if (!continuationScheduler || IsCurrentScheduler(continuationScheduler))
+                auto * scheduler = continuation.Scheduler();
+                if (!scheduler)
+                {
+                    scheduler = promise.ContinuationScheduler();
+                }
+
+                if (!scheduler || IsCurrentScheduler(scheduler))
                 {
                     // Check: continuation state is set to running?
-                    return continuation;
+                    return continuation.Handle();
                 }
 
                 // Schedule continuation to run on different scheduler
                 // Check: continuation state is set to scheduled?
-                continuationScheduler->Schedule(ScheduleItem(continuation));
+                scheduler->Schedule(ScheduleItem(continuation.Handle()));
 
                 return std::noop_coroutine();
             }
@@ -182,11 +153,11 @@ namespace TaskSystem::v1_1
 
             // Note: assumes the scheduler's lifetime will exceed the coroutine execution
             ITaskScheduler * taskScheduler = nullptr;
-            ITaskScheduler * continuationScheduler = nullptr;
+            ITaskScheduler* continuationScheduler = nullptr;
 
             // Maybe: might need more than the handle to set continuation scheduled or running
             //        Handle, ExecutingScheduler, SetRunning, SetSuspended
-            std::coroutine_handle<> continuation = nullptr;
+            Detail::Continuation continuation = nullptr;
 
             state_type state = Created{};
 
@@ -320,25 +291,33 @@ namespace TaskSystem::v1_1
                 return true;
             }
 
-            [[nodiscard]] std::coroutine_handle<> Continuation() const noexcept
+            [[nodiscard]] Detail::Continuation const & Continuation() const noexcept
             {
                 return continuation;
             }
 
-            void Continuation(std::coroutine_handle<> value)
+            // Maybe: TryAddContinuation?
+            bool TrySetContinuation(Detail::Continuation value)
             {
-                // Maybe: lock and fail if state is Completed or Faulted?
-                continuation = value;
-            }
+                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
-            [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept
-            {
-                return continuationScheduler;
-            }
+                if (!StateIsOneOf<Created, Scheduled, Running, Suspended>())
+                {
+                    stateFlag.clear(std::memory_order_release);
+                    return false;
+                }
 
-            void ContinuationScheduler(ITaskScheduler * value) noexcept
-            {
-                continuationScheduler = value;
+                if (continuation)
+                {
+                    // ToDo: return error code ContinuationAlreadySet
+                    stateFlag.clear(std::memory_order_release);
+                    return false;
+                }
+
+                continuation = std::move(value);
+
+                stateFlag.clear(std::memory_order_release);
+                return true;
             }
 
             [[nodiscard]] ITaskScheduler * TaskScheduler() const noexcept
@@ -349,6 +328,16 @@ namespace TaskSystem::v1_1
             void TaskScheduler(ITaskScheduler * value) noexcept
             {
                 taskScheduler = value;
+            }
+
+            [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept
+            {
+                return continuationScheduler;
+            }
+
+            void ContinuationScheduler(ITaskScheduler * value) noexcept
+            {
+                continuationScheduler = value;
             }
 
             [[nodiscard]] TResult Result() &
@@ -439,7 +428,11 @@ namespace TaskSystem::v1_1
                     assert(false);
                 }
 
-                handle.promise().Continuation(caller);
+                if (!handle.promise().TrySetContinuation(Detail::Continuation(caller)))
+                {
+                    // throw std::exception("Unable to set continuation");
+                    assert(false);
+                }
 
                 // Maybe: template on the caller promise type, can read the current scheduler out of the promise?
                 auto * taskScheduler = handle.promise().TaskScheduler();
