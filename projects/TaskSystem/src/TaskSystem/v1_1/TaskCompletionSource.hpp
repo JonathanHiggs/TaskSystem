@@ -3,10 +3,12 @@
 #include <TaskSystem/v1_1/Detail/Continuation.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 #include <TaskSystem/v1_1/Detail/Utils.hpp>
+#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
 #include <TaskSystem/v1_1/Task.hpp>
 
 #include <coroutine>
 #include <exception>
+#include <mutex>
 #include <type_traits>
 #include <variant>
 
@@ -27,7 +29,8 @@ namespace TaskSystem::v1_1
             // Disable: warning C4324: structure was padded due to alignment specifier
             // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
 
-            alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
+            // Note: can use std::atomic_flag after ABI break
+            alignas(CacheLineSize) mutable std::atomic<bool> stateFlag;
             alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
 #pragma warning(default : 4324)
 
@@ -46,9 +49,11 @@ namespace TaskSystem::v1_1
 
             [[nodiscard]] TaskState State() const noexcept
             {
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
-                auto index = state.index();
-                stateFlag.clear(std::memory_order_release);
+                size_t index;
+                {
+                    std::lock_guard lock(stateFlag);
+                    index = state.index();
+                }
 
                 switch (index)
                 {
@@ -73,17 +78,15 @@ namespace TaskSystem::v1_1
                     return false;
                 }
 
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+                std::lock_guard lock(stateFlag);
 
                 if (!StateIsOneOf<Created, Suspended>())
                 {
-                    stateFlag.clear(std::memory_order_release);
                     return false;
                 }
 
                 continuation = std::move(value);
 
-                stateFlag.clear(std::memory_order_release);
                 return true;
             }
 
@@ -99,48 +102,34 @@ namespace TaskSystem::v1_1
 
             [[nodiscard]] TResult Result() &
             {
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+                std::lock_guard lock(stateFlag);
 
                 if (StateIsOneOf<Created>())
                 {
-                    stateFlag.clear(std::memory_order_release);
                     throw std::exception("Task is not complete");
                 }
                 else if (auto * fault = std::get_if<Faulted>(&state))
                 {
-                    auto ex = fault->Exception;
-                    stateFlag.clear(std::memory_order_release);
-
-                    std::rethrow_exception(ex);
+                    std::rethrow_exception(fault->Exception);
                 }
 
-                auto result = std::get<Completed<TResult>>(state).Value;
-                stateFlag.clear(std::memory_order_release);
-
-                return result;
+                return std::get<Completed<TResult>>(state).Value;
             }
 
             [[nodiscard]] TResult Result() &&
             {
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+                std::lock_guard lock(stateFlag);
 
                 if (StateIsOneOf<Created>())
                 {
-                    stateFlag.clear(std::memory_order_release);
                     throw std::exception("Task is not complete");
                 }
                 else if (auto * fault = std::get_if<Faulted>(&state))
                 {
-                    auto ex = fault->Exception;
-                    stateFlag.clear(std::memory_order_release);
-
-                    std::rethrow_exception(ex);
+                    std::rethrow_exception(fault->Exception);
                 }
 
-                auto result = std::get<Completed<TResult>>(std::move(state)).Value;
-                stateFlag.clear(std::memory_order_release);
-
-                return result;
+                return std::get<Completed<TResult>>(std::move(state)).Value;
             }
 
             constexpr bool TrySetScheduled() const noexcept
@@ -155,16 +144,14 @@ namespace TaskSystem::v1_1
 
             bool TrySetSuspended() noexcept
             {
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+                std::lock_guard lock(stateFlag);
 
                 if (!StateIsOneOf<Created>())
                 {
-                    stateFlag.clear(std::memory_order_release);
                     return false;
                 }
 
                 state = Suspended{};
-                stateFlag.clear(std::memory_order_release);
 
                 return true;
             }
@@ -172,39 +159,39 @@ namespace TaskSystem::v1_1
             template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
             [[nodiscard]] bool TrySetResult(TValue && value) noexcept
             {
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+                {
+                    std::lock_guard lock(stateFlag);
 
-                if (!StateIsOneOf<Created, Suspended>())
-                {
-                    stateFlag.clear(std::memory_order_release);
-                    return false;
-                }
+                    if (!StateIsOneOf<Created, Suspended>())
+                    {
+                        return false;
+                    }
 
-                if constexpr (std::is_nothrow_constructible_v<TResult, decltype(value)>)
-                {
-                    state = Completed<TResult>{ std::forward<TValue>(value) };
-                }
-                else
-                {
-                    try
+                    if constexpr (std::is_nothrow_constructible_v<TResult, decltype(value)>)
                     {
                         state = Completed<TResult>{ std::forward<TValue>(value) };
                     }
-                    catch (...)
+                    else
                     {
-                        state = Faulted{ std::current_exception() };
+                        try
+                        {
+                            state = Completed<TResult>{ std::forward<TValue>(value) };
+                        }
+                        catch (...)
+                        {
+                            state = Faulted{ std::current_exception() };
+                        }
                     }
-                }
 
-                stateFlag.clear(std::memory_order_release);
+                    // Note: access to continuation is not locked, so access within this lock
+                    if (continuation)
+                    {
+                        auto * scheduler =
+                            Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
 
-                if (continuation)
-                {
-                    auto * scheduler =
-                        Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
-
-                    // Note: Could null deref until DefaultScheduler is implemented
-                    scheduler->Schedule(continuation.Handle());
+                        // Note: Could null deref until DefaultScheduler is implemented
+                        scheduler->Schedule(continuation.Handle());
+                    }
                 }
 
                 // Release any threads waiting for the result
@@ -216,26 +203,26 @@ namespace TaskSystem::v1_1
 
             [[nodiscard]] bool TrySetException(std::exception_ptr ex) noexcept
             {
-                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
-
-                if (!StateIsOneOf<Created, Suspended>())
                 {
-                    stateFlag.clear(std::memory_order_release);
-                    return false;
-                }
+                    std::lock_guard lock(stateFlag);
 
-                state = Faulted{ ex };
+                    if (!StateIsOneOf<Created, Suspended>())
+                    {
+                        return false;
+                    }
 
-                stateFlag.clear(std::memory_order_release);
+                    state = Faulted{ ex };
 
-                if (continuation)
-                {
-                    // Maybe: optimization to set promise exception directly?
-                    auto * scheduler =
-                        Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
+                    // Note: access to continuation is not locked, so access within this lock
+                    if (continuation)
+                    {
+                        // Maybe: optimization to set promise exception directly?
+                        auto * scheduler =
+                            Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
 
-                    // Note: Could null deref until DefaultScheduler is implemented
-                    scheduler->Schedule(continuation.Handle());
+                        // Note: Could null deref until DefaultScheduler is implemented
+                        scheduler->Schedule(continuation.Handle());
+                    }
                 }
 
                 // Release any threads waiting for the result

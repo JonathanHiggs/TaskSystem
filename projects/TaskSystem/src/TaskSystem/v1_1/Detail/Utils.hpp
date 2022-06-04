@@ -1,8 +1,12 @@
 #pragma once
 
+#include <atomic>
+
 
 namespace TaskSystem::v1_1::Detail
 {
+
+    inline constexpr size_t CacheLineSize = std::hardware_destructive_interference_size;
 
     // ToDo: there is almost certainly a better way of doing this
     template <typename T>
