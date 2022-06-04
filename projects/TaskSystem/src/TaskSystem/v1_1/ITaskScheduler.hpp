@@ -19,6 +19,8 @@ namespace TaskSystem::v1_1
     // ToDo: Move these to ExecutionContext class
     ITaskScheduler * CurrentScheduler();
 
+    ITaskScheduler * DefaultScheduler();
+
     bool IsCurrentScheduler(ITaskScheduler * scheduler);
 
 }  // namespace TaskSystem::v1_1

@@ -16,6 +16,12 @@ namespace TaskSystem::v1_1
         return current;
     }
 
+    ITaskScheduler * DefaultScheduler()
+    {
+        // ToDo: return global TaskScheduler instance
+        return nullptr;
+    }
+
     bool IsCurrentScheduler(ITaskScheduler * scheduler)
     {
         return scheduler == CurrentScheduler();

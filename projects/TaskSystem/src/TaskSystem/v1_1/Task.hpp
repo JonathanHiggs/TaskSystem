@@ -1,10 +1,11 @@
 #pragma once
 
 #include <TaskSystem/TaskState.hpp>
-#include <TaskSystem/v1_1/ITaskScheduler.hpp>
-#include <TaskSystem/v1_1/ScheduleItem.hpp>
 #include <TaskSystem/v1_1/Detail/Continuation.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
+#include <TaskSystem/v1_1/Detail/Utils.hpp>
+#include <TaskSystem/v1_1/ITaskScheduler.hpp>
+#include <TaskSystem/v1_1/ScheduleItem.hpp>
 
 #include <atomic>
 #include <cassert>
@@ -106,11 +107,8 @@ namespace TaskSystem::v1_1
                 //     continuation.SetError(promise.ExceptionPtr());
                 // }
 
-                auto * scheduler = continuation.Scheduler();
-                if (!scheduler)
-                {
-                    scheduler = promise.ContinuationScheduler();
-                }
+                auto * scheduler =
+                    Detail::FirstOf(continuation.Scheduler(), promise.ContinuationScheduler(), DefaultScheduler());
 
                 if (!scheduler || IsCurrentScheduler(scheduler))
                 {
@@ -146,14 +144,14 @@ namespace TaskSystem::v1_1
 #pragma warning(disable : 4324)
             // Disable: warning C4324: structure was padded due to alignment specifier
             // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
-            
+
             alignas(CacheLineSize) mutable std::atomic_flag stateFlag;
             alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
 #pragma warning(default : 4234)
 
             // Note: assumes the scheduler's lifetime will exceed the coroutine execution
             ITaskScheduler * taskScheduler = nullptr;
-            ITaskScheduler* continuationScheduler = nullptr;
+            ITaskScheduler * continuationScheduler = nullptr;
 
             // Maybe: might need more than the handle to set continuation scheduled or running
             //        Handle, ExecutingScheduler, SetRunning, SetSuspended
@@ -297,19 +295,18 @@ namespace TaskSystem::v1_1
             }
 
             // Maybe: TryAddContinuation?
-            bool TrySetContinuation(Detail::Continuation value)
+            [[nodiscard]] bool TrySetContinuation(Detail::Continuation value)
             {
+                if (!value)
+                {
+                    // Maybe: return error code ContinuationAlreadySet
+                    return false;
+                }
+
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
                 if (!StateIsOneOf<Created, Scheduled, Running, Suspended>())
                 {
-                    stateFlag.clear(std::memory_order_release);
-                    return false;
-                }
-
-                if (continuation)
-                {
-                    // ToDo: return error code ContinuationAlreadySet
                     stateFlag.clear(std::memory_order_release);
                     return false;
                 }
@@ -435,12 +432,12 @@ namespace TaskSystem::v1_1
                 }
 
                 // Maybe: template on the caller promise type, can read the current scheduler out of the promise?
-                auto * taskScheduler = handle.promise().TaskScheduler();
-                if (taskScheduler && !IsCurrentScheduler(taskScheduler))
+                auto * scheduler = handle.promise().TaskScheduler();
+                if (scheduler && !IsCurrentScheduler(scheduler))
                 {
                     if (handle.promise().TrySetScheduled())
                     {
-                        taskScheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
+                        scheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
                     }
                     return std::noop_coroutine();
                 }

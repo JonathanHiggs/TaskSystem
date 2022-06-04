@@ -1,7 +1,9 @@
 #pragma once
 
-#include <TaskSystem/v1_1/Task.hpp>
+#include <TaskSystem/v1_1/Detail/Continuation.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
+#include <TaskSystem/v1_1/Detail/Utils.hpp>
+#include <TaskSystem/v1_1/Task.hpp>
 
 #include <coroutine>
 #include <exception>
@@ -30,8 +32,8 @@ namespace TaskSystem::v1_1
 #pragma warning(default : 4324)
 
             state_type state = Created{};
+            Detail::Continuation continuation = nullptr;
             ITaskScheduler * continuationScheduler = nullptr;
-            std::coroutine_handle<> continuation = nullptr;
 
             template <typename... Ts>
             bool StateIsOneOf()
@@ -58,14 +60,31 @@ namespace TaskSystem::v1_1
                 }
             }
 
-            [[nodiscard]] std::coroutine_handle<> Continuation() const noexcept
+            [[nodiscard]] Detail::Continuation Continuation() const noexcept
             {
                 return continuation;
             }
 
-            void Continuation(std::coroutine_handle<> value)
+            // Maybe: TryAddContinuation?
+            [[nodiscard]] bool TrySetContinuation(Detail::Continuation value)
             {
-                continuation = value;
+                if (!value)
+                {
+                    return false;
+                }
+
+                while (stateFlag.test_and_set(std::memory_order_acquire)) { }
+
+                if (!StateIsOneOf<Created, Suspended>())
+                {
+                    stateFlag.clear(std::memory_order_release);
+                    return false;
+                }
+
+                continuation = std::move(value);
+
+                stateFlag.clear(std::memory_order_release);
+                return true;
             }
 
             [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept
@@ -179,9 +198,13 @@ namespace TaskSystem::v1_1
 
                 stateFlag.clear(std::memory_order_release);
 
-                if (continuation && continuationScheduler)
+                if (continuation)
                 {
-                    continuationScheduler->Schedule(continuation);
+                    auto * scheduler =
+                        Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
+
+                    // Note: Could null deref until DefaultScheduler is implemented
+                    scheduler->Schedule(continuation.Handle());
                 }
 
                 // Release any threads waiting for the result
@@ -191,7 +214,7 @@ namespace TaskSystem::v1_1
                 return true;
             }
 
-            [[nodiscard]] bool TrySetException(std::exception_ptr ex)
+            [[nodiscard]] bool TrySetException(std::exception_ptr ex) noexcept
             {
                 while (stateFlag.test_and_set(std::memory_order_acquire)) { }
 
@@ -205,9 +228,14 @@ namespace TaskSystem::v1_1
 
                 stateFlag.clear(std::memory_order_release);
 
-                if (continuation && continuationScheduler)
+                if (continuation)
                 {
-                    continuationScheduler->Schedule(continuation);
+                    // Maybe: optimization to set promise exception directly?
+                    auto * scheduler =
+                        Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
+
+                    // Note: Could null deref until DefaultScheduler is implemented
+                    scheduler->Schedule(continuation.Handle());
                 }
 
                 // Release any threads waiting for the result
@@ -262,12 +290,13 @@ namespace TaskSystem::v1_1
                 {
                     return caller;
                 }
-                // Note: possible data race if promise is set Complete or Faulted between TrySetSuspend and 
-                //       setting continuations
 
                 // Suspend the caller and don't schedule anything new
-                promise.Continuation(caller);
-                promise.ContinuationScheduler(CurrentScheduler());
+                if (!promise.TrySetContinuation(Detail::Continuation(caller, CurrentScheduler())))
+                {
+                    // Maybe: check is status is completed and return caller handle;
+                    throw std::exception("Unable to schedule continuation");
+                }
 
                 return std::noop_coroutine();
             }
