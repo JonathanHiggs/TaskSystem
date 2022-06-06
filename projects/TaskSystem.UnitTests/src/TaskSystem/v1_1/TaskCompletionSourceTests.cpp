@@ -28,7 +28,7 @@ namespace TaskSystem::v1_1::Tests
 
         scheduler.Run();
 
-        EXPECT_EQ(innerTask.State(), TaskState::Suspended);
+        EXPECT_EQ(innerTask.State(), TaskState::Created);
         EXPECT_EQ(task.State(), TaskState::Suspended);
 
         EXPECT_TRUE(taskCompletionSource.TrySetResult(expected));
@@ -64,7 +64,7 @@ namespace TaskSystem::v1_1::Tests
 
         scheduler.Run();
 
-        EXPECT_EQ(innerTask.State(), TaskState::Suspended);
+        EXPECT_EQ(innerTask.State(), TaskState::Created);
         EXPECT_EQ(task.State(), TaskState::Suspended);
 
         EXPECT_TRUE(taskCompletionSource.TrySetException(expected()));

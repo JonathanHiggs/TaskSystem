@@ -12,14 +12,14 @@ namespace TaskSystem
     class TaskState final
     {
     public:
-        enum ValueType  // : u8
+        enum ValueType // : u8
         {
             Created,
             Scheduled,
             Running,
             Suspended,
             Completed,
-            Cancelled,  // ToDo: remove - not used
+            Cancelled, // ToDo: remove - not used
             Error,     // ToDo: rename Faulted
             Unknown
         };
@@ -58,7 +58,7 @@ namespace TaskSystem
             case Running:   return "Running";
             case Suspended: return "Suspended";
             case Completed: return "Completed";
-            case Cancelled:  return "Cancelled";
+            case Cancelled: return "Cancelled";
             case Error:     return "Error";
             case Unknown:
             default:        return "Unknown";

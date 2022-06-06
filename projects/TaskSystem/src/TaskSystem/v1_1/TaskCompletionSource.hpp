@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TaskSystem/v1_1/Detail/Continuation.hpp>
+#include <TaskSystem/v1_1/Detail/Promise.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 #include <TaskSystem/v1_1/Detail/Utils.hpp>
 #include <TaskSystem/v1_1/AtomicLockGuard.hpp>
@@ -18,226 +19,16 @@ namespace TaskSystem::v1_1
     namespace Detail
     {
 
-        // Maybe: template on the exception type rather than assuming exception_ptr?
-        template <typename TResult>
-        class TaskCompletionSourcePromise final
+        struct TaskCompletionSourcePromisePolicy final
         {
-        private:
-            using state_type = std::variant<Created, Suspended, Completed<TResult>, Faulted>;
-
-#pragma warning(disable : 4324)
-            // Disable: warning C4324: structure was padded due to alignment specifier
-            // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
-
-            // Note: can use std::atomic_flag after ABI break
-            alignas(CacheLineSize) mutable std::atomic<bool> stateFlag;
-            alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
-#pragma warning(default : 4324)
-
-            state_type state = Created{};
-            Detail::Continuation continuation = nullptr;
-            ITaskScheduler * continuationScheduler = nullptr;
-
-            template <typename... Ts>
-            bool StateIsOneOf()
-            {
-                return (std::holds_alternative<Ts>(state) || ...);
-            }
-
-        public:
-            // ToDo: handle delete promise while thread is waiting
-
-            [[nodiscard]] TaskState State() const noexcept
-            {
-                size_t index;
-                {
-                    std::lock_guard lock(stateFlag);
-                    index = state.index();
-                }
-
-                switch (index)
-                {
-                case 0u: return TaskState::Created;
-                case 1u: return TaskState::Suspended;
-                case 2u: return TaskState::Completed;
-                case 3u: return TaskState::Error;
-                default: return TaskState::Unknown;
-                }
-            }
-
-            [[nodiscard]] Detail::Continuation Continuation() const noexcept
-            {
-                return continuation;
-            }
-
-            // Maybe: TryAddContinuation?
-            [[nodiscard]] bool TrySetContinuation(Detail::Continuation value)
-            {
-                if (!value)
-                {
-                    return false;
-                }
-
-                std::lock_guard lock(stateFlag);
-
-                if (!StateIsOneOf<Created, Suspended>())
-                {
-                    return false;
-                }
-
-                continuation = std::move(value);
-
-                return true;
-            }
-
-            [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept
-            {
-                return continuationScheduler;
-            }
-
-            void ContinuationScheduler(ITaskScheduler * value) noexcept
-            {
-                continuationScheduler = value;
-            }
-
-            [[nodiscard]] TResult Result() &
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (StateIsOneOf<Created>())
-                {
-                    throw std::exception("Task is not complete");
-                }
-                else if (auto * fault = std::get_if<Faulted>(&state))
-                {
-                    std::rethrow_exception(fault->Exception);
-                }
-
-                return std::get<Completed<TResult>>(state).Value;
-            }
-
-            [[nodiscard]] TResult Result() &&
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (StateIsOneOf<Created>())
-                {
-                    throw std::exception("Task is not complete");
-                }
-                else if (auto * fault = std::get_if<Faulted>(&state))
-                {
-                    std::rethrow_exception(fault->Exception);
-                }
-
-                return std::get<Completed<TResult>>(std::move(state)).Value;
-            }
-
-            constexpr bool TrySetScheduled() const noexcept
-            {
-                return false;
-            }
-
-            constexpr bool TrySetRunning() const noexcept
-            {
-                return false;
-            }
-
-            bool TrySetSuspended() noexcept
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (!StateIsOneOf<Created>())
-                {
-                    return false;
-                }
-
-                state = Suspended{};
-
-                return true;
-            }
-
-            template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
-            [[nodiscard]] bool TrySetResult(TValue && value) noexcept
-            {
-                {
-                    std::lock_guard lock(stateFlag);
-
-                    if (!StateIsOneOf<Created, Suspended>())
-                    {
-                        return false;
-                    }
-
-                    if constexpr (std::is_nothrow_constructible_v<TResult, decltype(value)>)
-                    {
-                        state = Completed<TResult>{ std::forward<TValue>(value) };
-                    }
-                    else
-                    {
-                        try
-                        {
-                            state = Completed<TResult>{ std::forward<TValue>(value) };
-                        }
-                        catch (...)
-                        {
-                            state = Faulted{ std::current_exception() };
-                        }
-                    }
-
-                    // Note: access to continuation is not locked, so access within this lock
-                    if (continuation)
-                    {
-                        auto * scheduler =
-                            Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
-
-                        // Note: Could null deref until DefaultScheduler is implemented
-                        scheduler->Schedule(continuation.Handle());
-                    }
-                }
-
-                // Release any threads waiting for the result
-                completeFlag.test_and_set(std::memory_order_acquire);
-                completeFlag.notify_all();
-
-                return true;
-            }
-
-            [[nodiscard]] bool TrySetException(std::exception_ptr ex) noexcept
-            {
-                {
-                    std::lock_guard lock(stateFlag);
-
-                    if (!StateIsOneOf<Created, Suspended>())
-                    {
-                        return false;
-                    }
-
-                    state = Faulted{ ex };
-
-                    // Note: access to continuation is not locked, so access within this lock
-                    if (continuation)
-                    {
-                        // Maybe: optimization to set promise exception directly?
-                        auto * scheduler =
-                            Detail::FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
-
-                        // Note: Could null deref until DefaultScheduler is implemented
-                        scheduler->Schedule(continuation.Handle());
-                    }
-                }
-
-                // Release any threads waiting for the result
-                completeFlag.test_and_set(std::memory_order_acquire);
-                completeFlag.notify_all();
-
-                return true;
-            }
-
-            void Wait() const noexcept
-            {
-                // Waits for TryGetResult or TrySetException to set complete flag to true
-                completeFlag.wait(false, std::memory_order_acquire);
-            }
+            static inline constexpr bool ScheduleContinuations = true;
+            static inline constexpr bool CanSchedule = false;
+            static inline constexpr bool CanRun = false;
+            static inline constexpr bool CanSuspend = false;
         };
+
+        template <typename TResult>
+        using TaskCompletionSourcePromise = Promise<TaskCompletionSourcePromisePolicy, TResult>;
 
         template <typename TResult, bool MoveResult>
         class TaskCompletionSourceAwaitable
@@ -258,8 +49,7 @@ namespace TaskSystem::v1_1
                 return false;
             }
 
-            // ToDo: Promise concept
-            template <typename TPromise>
+            template <PromiseType TPromise>
             std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> caller)
             {
                 if (promise.State().IsCompleted())
@@ -271,11 +61,6 @@ namespace TaskSystem::v1_1
                 {
                     // ToDo: what to do here?
                     throw std::exception("Unable to set caller promise to suspend state");
-                }
-
-                if (!promise.TrySetSuspended())
-                {
-                    return caller;
                 }
 
                 // Suspend the caller and don't schedule anything new

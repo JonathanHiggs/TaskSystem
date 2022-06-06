@@ -1,10 +1,11 @@
 #pragma once
 
 #include <TaskSystem/TaskState.hpp>
+#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
 #include <TaskSystem/v1_1/Detail/Continuation.hpp>
+#include <TaskSystem/v1_1/Detail/Promise.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 #include <TaskSystem/v1_1/Detail/Utils.hpp>
-#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
 #include <TaskSystem/v1_1/ITaskScheduler.hpp>
 #include <TaskSystem/v1_1/ScheduleItem.hpp>
 
@@ -47,7 +48,7 @@ namespace TaskSystem::v1_1
 
             void await_suspend(std::coroutine_handle<>) const noexcept
             {
-                auto * taskScheduler = promise.TaskScheduler();
+                auto * taskScheduler = FirstOf(promise.TaskScheduler(), DefaultScheduler());
                 if (!taskScheduler)
                 {
                     return;
@@ -69,7 +70,10 @@ namespace TaskSystem::v1_1
                 auto set = promise.TrySetRunning();
                 assert(set);
 #else
-                promise.TrySetRunning();
+                if (!promise.TrySetRunning())
+                {
+                    throw std::exception("Unable to set task running");
+                }
 #endif
             }
         };
@@ -128,9 +132,17 @@ namespace TaskSystem::v1_1
             { }
         };
 
+        struct TaskPromisePolicy final
+        {
+            static inline constexpr bool ScheduleContinuations = false;
+            static inline constexpr bool CanSchedule = true;
+            static inline constexpr bool CanRun = true;
+            static inline constexpr bool CanSuspend = true;
+        };
+
         // Maybe: template on the exception type rather than assuming exception_ptr?
         template <typename TResult>
-        class TaskPromise final
+        class TaskPromise final : public Promise<TaskPromisePolicy, TResult>
         {
         public:
             using value_type = TResult;
@@ -138,34 +150,11 @@ namespace TaskSystem::v1_1
             using handle_type = std::coroutine_handle<promise_type>;
 
         private:
-            using state_type = std::variant<Created, Scheduled, Running, Suspended, Completed<TResult>, Faulted>;
-
-#pragma warning(disable : 4324)
-            // Disable: warning C4324: structure was padded due to alignment specifier
-            // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
-
-            // Note: can use std::atomic_flag after ABI break
-            alignas(CacheLineSize) mutable std::atomic<bool> stateFlag;
-            alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
-#pragma warning(default : 4234)
-
-            // Note: assumes the scheduler's lifetime will exceed the coroutine execution
             ITaskScheduler * taskScheduler = nullptr;
-            ITaskScheduler * continuationScheduler = nullptr;
-
-            // Maybe: might need more than the handle to set continuation scheduled or running
-            //        Handle, ExecutingScheduler, SetRunning, SetSuspended
-            Detail::Continuation continuation = nullptr;
-
-            state_type state = Created{};
-
-            template <typename... Ts>
-            bool StateIsOneOf()
-            {
-                return (std::holds_alternative<Ts>(state) || ...);
-            }
 
         public:
+            ~TaskPromise() noexcept override = default;
+
             Task<TResult, TaskPromise> get_return_object() noexcept
             {
                 return Task<TResult, TaskPromise>(handle_type::from_promise(*this));
@@ -183,133 +172,12 @@ namespace TaskSystem::v1_1
 
             void unhandled_exception() noexcept
             {
-                {
-                    std::lock_guard lock(stateFlag);
-                    state = Faulted{ std::current_exception() };
-                }
-
-                // Release any threads waiting for the result
-                completeFlag.test_and_set(std::memory_order_acquire);
-                completeFlag.notify_all();
+                this->TrySetException(std::current_exception());
             }
 
-            template <typename TValue, typename = std::enable_if_t<std::is_convertible_v<TValue &&, TResult>>>
-            void return_value(TValue && value) noexcept
+            void return_value(std::convertible_to<TResult> auto && value) noexcept
             {
-                {
-                    std::lock_guard lock(stateFlag);
-
-                    if constexpr (std::is_nothrow_constructible_v<TResult, TValue&&>)
-                    {
-                        state = Completed<TResult>{ std::forward<TValue>(value) };
-                    }
-                    else
-                    {
-                        try
-                        {
-                            state = Completed<TResult>{ std::forward<TValue>(value) };
-                        }
-                        catch (...)
-                        {
-                            state = Faulted{ std::current_exception() };
-                        }
-                    }
-                }
-
-                // Release any threads waiting for the result
-                completeFlag.test_and_set(std::memory_order_acquire);
-                completeFlag.notify_all();
-            }
-
-            [[nodiscard]] TaskState State() const noexcept
-            {
-                size_t index;
-                {
-                    std::lock_guard lock(stateFlag);
-                    index = state.index();
-                }
-
-                switch (index)
-                {
-                case 0u: return TaskState::Created;
-                case 1u: return TaskState::Scheduled;
-                case 2u: return TaskState::Running;
-                case 3u: return TaskState::Suspended;
-                case 4u: return TaskState::Completed;
-                case 5u: return TaskState::Error;
-                default: return TaskState::Unknown;
-                }
-            }
-
-            // Returns true if the method was able to atomically set the state to Scheduled; false otherwise
-            [[nodiscard]] bool TrySetScheduled() noexcept
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (!StateIsOneOf<Created, Suspended>())
-                {
-                    return false;
-                }
-
-                state = Scheduled{};
-
-                return true;
-            }
-
-            // Returns true if the method was able to atomically set the state to Running; false otherwise
-            [[nodiscard]] bool TrySetRunning() noexcept
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (!StateIsOneOf<Created, Scheduled, Suspended>())
-                {
-                    return false;
-                }
-
-                state = Running{};
-
-                return true;
-            }
-
-            // Returns true if the method was able to atomically set the state to Suspended; false otherwise
-            [[nodiscard]] bool TrySetSuspended() noexcept
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (!StateIsOneOf<Running>())
-                {
-                    return false;
-                }
-
-                state = Suspended{};
-
-                return true;
-            }
-
-            [[nodiscard]] Detail::Continuation const & Continuation() const noexcept
-            {
-                return continuation;
-            }
-
-            // Maybe: TryAddContinuation?
-            [[nodiscard]] bool TrySetContinuation(Detail::Continuation value)
-            {
-                if (!value)
-                {
-                    // Maybe: return error code ContinuationAlreadySet
-                    return false;
-                }
-
-                std::lock_guard lock(stateFlag);
-
-                if (!StateIsOneOf<Created, Scheduled, Running, Suspended>())
-                {
-                    return false;
-                }
-
-                continuation = std::move(value);
-
-                return true;
+                this->TrySetResult(std::forward<decltype(value)>(value));
             }
 
             [[nodiscard]] ITaskScheduler * TaskScheduler() const noexcept
@@ -320,54 +188,6 @@ namespace TaskSystem::v1_1
             void TaskScheduler(ITaskScheduler * value) noexcept
             {
                 taskScheduler = value;
-            }
-
-            [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept
-            {
-                return continuationScheduler;
-            }
-
-            void ContinuationScheduler(ITaskScheduler * value) noexcept
-            {
-                continuationScheduler = value;
-            }
-
-            [[nodiscard]] TResult Result() &
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (StateIsOneOf<Created, Scheduled, Running, Suspended>())
-                {
-                    throw std::exception("Task is not complete");
-                }
-                else if (auto * fault = std::get_if<Faulted>(&state))
-                {
-                    std::rethrow_exception(fault->Exception);
-                }
-
-                return std::get<Completed<TResult>>(state).Value;
-            }
-
-            [[nodiscard]] TResult Result() &&
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (StateIsOneOf<Created, Scheduled, Running, Suspended>())
-                {
-                    throw std::exception("Task is not complete");
-                }
-                else if (auto * fault = std::get_if<Faulted>(&state))
-                {
-                    std::rethrow_exception(fault->Exception);
-                }
-
-                return std::get<Completed<TResult>>(std::move(state)).Value;
-            }
-
-            void Wait() const noexcept
-            {
-                // Waits for return_value or unhandled_exception to set completeFlag to true
-                completeFlag.wait(false, std::memory_order_acquire);
             }
         };
 
