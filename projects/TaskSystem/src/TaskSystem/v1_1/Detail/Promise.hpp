@@ -42,7 +42,6 @@ namespace TaskSystem::v1_1::Detail
         // alignment pads out the promise but also ensures the two atomic_flags are on different cache lines
 
         // Note: can use std::atomic_flag after ABI break
-
         alignas(CacheLineSize) mutable std::atomic<bool> stateFlag;
         alignas(CacheLineSize) mutable std::atomic_flag completeFlag;
 #pragma warning(default : 4324)

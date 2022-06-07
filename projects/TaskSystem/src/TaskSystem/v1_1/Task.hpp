@@ -48,33 +48,27 @@ namespace TaskSystem::v1_1
 
             void await_suspend(std::coroutine_handle<>) const noexcept
             {
-                auto * taskScheduler = FirstOf(promise.TaskScheduler(), DefaultScheduler());
+                auto * taskScheduler = promise.TaskScheduler();
                 if (!taskScheduler)
                 {
                     return;
                 }
 
                 // Check this thread set the promise to scheduled, i.e. no other thread beat us
-                auto set = promise.TrySetScheduled();
-                if (set)
+                if (promise.TrySetScheduled())
                 {
                     auto handle = handle_type::from_promise(promise);
                     taskScheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
                 }
             }
 
-            void await_resume() const noexcept
+            void await_resume() const
             {
-#if _DEBUG
                 // Check this thread set the promise to running
-                auto set = promise.TrySetRunning();
-                assert(set);
-#else
                 if (!promise.TrySetRunning())
                 {
                     throw std::exception("Unable to set task running");
                 }
-#endif
             }
         };
 
@@ -191,7 +185,6 @@ namespace TaskSystem::v1_1
             }
         };
 
-        // ToDo: template <typename TResult, bool MoveResult>
         template <typename TResult, bool MoveResult>
         class TaskAwaitable final
         {
@@ -226,7 +219,7 @@ namespace TaskSystem::v1_1
                     assert(false);
                 }
 
-                if (!handle.promise().TrySetContinuation(Detail::Continuation(caller)))
+                if (!handle.promise().TrySetContinuation(Detail::Continuation(&caller.promise(), caller)))
                 {
                     // throw std::exception("Unable to set continuation");
                     assert(false);
@@ -365,7 +358,6 @@ namespace TaskSystem::v1_1
         {
             if (!handle)
             {
-                // Maybe: TaskState::Destroyed?
                 return TaskState::Unknown;
             }
 
@@ -382,9 +374,26 @@ namespace TaskSystem::v1_1
             handle.promise().Wait();
         }
 
-        [[nodiscard]] TResult Result()
+        [[nodiscard]] TResult Result() &
         {
-            // ToDo: lvalue / rvalue versions
+            Wait();
+            return handle.promise().Result();
+        }
+
+        [[nodiscard]] TResult const & Result() const &
+        {
+            Wait();
+            return handle.promise().Result();
+        }
+
+        [[nodiscard]] TResult && Result() &&
+        {
+            Wait();
+            return handle.promise().Result();
+        }
+
+        [[nodiscard]] TResult const && Result() const &&
+        {
             Wait();
             return handle.promise().Result();
         }

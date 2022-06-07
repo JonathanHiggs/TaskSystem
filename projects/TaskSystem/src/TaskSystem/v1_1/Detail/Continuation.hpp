@@ -8,26 +8,38 @@
 namespace TaskSystem::v1_1::Detail
 {
 
+    class IPromise;
+
     class Continuation final
     {
     private:
-        std::coroutine_handle<> handle;
-        ITaskScheduler * scheduler;
+        IPromise * promise = nullptr;
+        std::coroutine_handle<> handle = nullptr;
+        ITaskScheduler * scheduler = nullptr;
 
     public:
-        Continuation() noexcept : handle(nullptr), scheduler(nullptr)
+        Continuation() noexcept
         { }
 
-        Continuation(std::coroutine_handle<> handle) noexcept : handle(handle), scheduler(nullptr)
+        Continuation(std::nullptr_t) noexcept
         { }
 
-        Continuation(std::coroutine_handle<> handle, ITaskScheduler * scheduler) noexcept
-            : handle(handle), scheduler(scheduler)
+        Continuation(IPromise * promise, std::coroutine_handle<> handle) noexcept
+            : promise(promise), handle(handle), scheduler(nullptr)
+        { }
+
+        Continuation(IPromise * promise, std::coroutine_handle<> handle, ITaskScheduler * scheduler) noexcept
+            : promise(promise), handle(handle), scheduler(scheduler)
         { }
 
         [[nodiscard]] operator bool() const noexcept
         {
             return handle != nullptr;
+        }
+
+        [[nodiscard]] IPromise * Promise() const noexcept
+        {
+            return promise;
         }
 
         [[nodiscard]] std::coroutine_handle<> Handle() const noexcept

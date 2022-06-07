@@ -1,10 +1,10 @@
 #pragma once
 
+#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
 #include <TaskSystem/v1_1/Detail/Continuation.hpp>
 #include <TaskSystem/v1_1/Detail/Promise.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 #include <TaskSystem/v1_1/Detail/Utils.hpp>
-#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
 #include <TaskSystem/v1_1/Task.hpp>
 
 #include <coroutine>
@@ -64,7 +64,7 @@ namespace TaskSystem::v1_1
                 }
 
                 // Suspend the caller and don't schedule anything new
-                if (!promise.TrySetContinuation(Detail::Continuation(caller, CurrentScheduler())))
+                if (!promise.TrySetContinuation(Detail::Continuation(&caller.promise(), caller, CurrentScheduler())))
                 {
                     // Maybe: check is status is completed and return caller handle;
                     throw std::exception("Unable to schedule continuation");
