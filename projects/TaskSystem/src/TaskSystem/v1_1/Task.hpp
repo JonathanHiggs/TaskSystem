@@ -6,6 +6,7 @@
 #include <TaskSystem/v1_1/Detail/Promise.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 #include <TaskSystem/v1_1/Detail/Utils.hpp>
+#include <TaskSystem/v1_1/ITask.hpp>
 #include <TaskSystem/v1_1/ITaskScheduler.hpp>
 #include <TaskSystem/v1_1/ScheduleItem.hpp>
 
@@ -266,7 +267,7 @@ namespace TaskSystem::v1_1
     }  // namespace Detail
 
     template <typename TResult, typename TPromise = Detail::TaskPromise<TResult>>
-    class [[nodiscard]] Task final
+    class [[nodiscard]] Task final : public ITask<TResult>
     {
     public:
         using value_type = TResult;
@@ -309,7 +310,7 @@ namespace TaskSystem::v1_1
             return *this;
         }
 
-        ~Task() noexcept
+        ~Task() noexcept override
         {
             if (handle)
             {
@@ -354,7 +355,7 @@ namespace TaskSystem::v1_1
             return Detail::TaskAwaitable<TResult, true>(handle);
         }
 
-        [[nodiscard]] TaskState State() const noexcept
+        [[nodiscard]] TaskState State() const noexcept override
         {
             if (!handle)
             {
@@ -364,7 +365,7 @@ namespace TaskSystem::v1_1
             return handle.promise().State();
         }
 
-        void Wait() const noexcept
+        void Wait() const noexcept override
         {
             if (!handle)
             {
@@ -374,29 +375,29 @@ namespace TaskSystem::v1_1
             handle.promise().Wait();
         }
 
-        [[nodiscard]] TResult Result() &
+        [[nodiscard]] TResult & Result() & override
         {
             Wait();
             return handle.promise().Result();
         }
 
-        [[nodiscard]] TResult const & Result() const &
+        [[nodiscard]] TResult const & Result() const & override
         {
             Wait();
             return handle.promise().Result();
         }
 
-        [[nodiscard]] TResult && Result() &&
-        {
-            Wait();
-            return handle.promise().Result();
-        }
+         [[nodiscard]] TResult && Result() && override
+         {
+             Wait();
+             return std::move(handle.promise().Result());
+         }
 
-        [[nodiscard]] TResult const && Result() const &&
-        {
-            Wait();
-            return handle.promise().Result();
-        }
+         [[nodiscard]] TResult const && Result() const && override
+         {
+             Wait();
+             return std::move(handle.promise().Result());
+         }
 
         Task & ScheduleOn(ITaskScheduler & taskScheduler) &
         {

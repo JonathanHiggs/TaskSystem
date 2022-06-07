@@ -5,6 +5,7 @@
 #include <TaskSystem/v1_1/Detail/Promise.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
 #include <TaskSystem/v1_1/Detail/Utils.hpp>
+#include <TaskSystem/v1_1/ITask.hpp>
 #include <TaskSystem/v1_1/Task.hpp>
 
 #include <coroutine>
@@ -89,7 +90,7 @@ namespace TaskSystem::v1_1
     }  // namespace Detail
 
     template <typename TResult>
-    class [[nodiscard]] Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> final
+    class [[nodiscard]] Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> final : public ITask<TResult>
     {
     public:
         using value_type = TResult;
@@ -99,6 +100,8 @@ namespace TaskSystem::v1_1
         promise_type & promise;
 
     public:
+        ~Task() noexcept override = default;
+
         explicit Task(promise_type & promise) noexcept : promise(promise)
         { }
 
@@ -112,20 +115,38 @@ namespace TaskSystem::v1_1
             return Detail::TaskCompletionSourceAwaitable<TResult, true>(promise);
         }
 
-        [[nodiscard]] TaskState State() const noexcept
+        [[nodiscard]] TaskState State() const noexcept override
         {
             return promise.State();
         }
 
-        void Wait() const noexcept
+        void Wait() const noexcept override
         {
             return promise.Wait();
         }
 
-        [[nodiscard]] TResult Result()
+        [[nodiscard]] TResult & Result() & override
         {
             Wait();
             return promise.Result();
+        }
+
+        [[nodiscard]] TResult const & Result() const & override
+        {
+            Wait();
+            return promise.Result();
+        }
+
+        [[nodiscard]] TResult && Result() && override
+        {
+            Wait();
+            return std::move(promise.Result());
+        }
+
+        [[nodiscard]] TResult const && Result() const && override
+        {
+            Wait();
+            return std::move(promise.Result());
         }
     };
 

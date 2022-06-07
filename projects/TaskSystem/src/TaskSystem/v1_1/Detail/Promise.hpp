@@ -263,7 +263,7 @@ namespace TaskSystem::v1_1::Detail
             return true;
         }
 
-        [[nodiscard]] TResult Result() &
+        [[nodiscard]] TResult & Result() &
         {
             std::lock_guard lock(this->stateFlag);
 
