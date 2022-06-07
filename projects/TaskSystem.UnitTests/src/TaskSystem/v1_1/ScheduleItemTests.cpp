@@ -21,7 +21,9 @@ namespace TaskSystem::v1_1::Tests
     {
         // Arrange
         auto completed = false;
-        auto lambda = [&]() { completed = true; };
+        auto lambda = [&]() {
+            completed = true;
+        };
 
         // Act
         auto item = ScheduleItem(std::move(lambda));
@@ -35,7 +37,9 @@ namespace TaskSystem::v1_1::Tests
     TEST(ScheduleItemTests, runLambdaThrows)
     {
         // Arrange
-        auto lambda = [&]() { throw std::exception(); };
+        auto lambda = [&]() {
+            throw std::exception();
+        };
 
         // Act
         auto item = ScheduleItem(std::move(lambda));

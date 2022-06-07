@@ -106,8 +106,8 @@ namespace TaskSystem::v1_1
                 //     continuation.SetError(promise.ExceptionPtr());
                 // }
 
-                auto * scheduler =
-                    Detail::FirstOf(continuation.Scheduler(), promise.ContinuationScheduler(), DefaultScheduler());
+                auto * scheduler
+                    = Detail::FirstOf(continuation.Scheduler(), promise.ContinuationScheduler(), DefaultScheduler());
 
                 if (!scheduler || IsCurrentScheduler(scheduler))
                 {

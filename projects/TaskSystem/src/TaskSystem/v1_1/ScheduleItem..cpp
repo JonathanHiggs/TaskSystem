@@ -28,7 +28,6 @@ namespace TaskSystem::v1_1
         {
             try
             {
-
                 (*lambda)();
             }
             catch (...)

@@ -26,7 +26,7 @@ namespace TaskSystem::Tests
     {
         std::atomic_flag flag;
         flag.clear(std::memory_order_relaxed);
-        //flag.test_and_set();
+        // flag.test_and_set();
 
         Log("[main] Starting worker\n");
 
@@ -46,11 +46,11 @@ namespace TaskSystem::Tests
             Log("[main] set flag: true\n");
             flag.test_and_set(std::memory_order_relaxed);
 
-            //std::this_thread::sleep_for(1s);
-            //Log("[main] notify one flag\n");
-            //flag.notify_one();
+            // std::this_thread::sleep_for(1s);
+            // Log("[main] notify one flag\n");
+            // flag.notify_one();
 
-            //std::this_thread::sleep_for(1s);
+            // std::this_thread::sleep_for(1s);
             Log("[main] notify all flag\n");
             flag.notify_all();
         });

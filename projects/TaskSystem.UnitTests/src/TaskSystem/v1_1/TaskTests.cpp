@@ -286,14 +286,18 @@ namespace TaskSystem::v1_1::Tests
         // Arrange
         auto expected = 42;
         auto scheduler = SynchronousTaskScheduler();
-        auto innerTask = [&]() -> Task<int> { co_return expected; }();
+        auto innerTask = [&]() -> Task<int> {
+            co_return expected;
+        }();
         scheduler.Schedule(innerTask);
         scheduler.Run();
 
         EXPECT_EQ(innerTask.State(), TaskState::Completed);
 
         // Act
-        auto task = [&]() -> Task<int> { co_return co_await innerTask; }();
+        auto task = [&]() -> Task<int> {
+            co_return co_await innerTask;
+        }();
 
         scheduler.Schedule(task);
         scheduler.Run();

@@ -1,5 +1,4 @@
 #include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
-
 #include <TaskSystem/v1_1/Task.hpp>
 
 #include <gtest/gtest.h>
@@ -14,8 +13,12 @@ namespace TaskSystem::v1_1::Tests
         auto completed1 = false;
         auto completed2 = false;
 
-        auto task1 = [&]() { completed1 = true; };
-        auto task2 = [&]() { completed2 = true; };
+        auto task1 = [&]() {
+            completed1 = true;
+        };
+        auto task2 = [&]() {
+            completed2 = true;
+        };
 
         auto scheduler = SynchronousTaskScheduler();
 
@@ -56,7 +59,7 @@ namespace TaskSystem::v1_1::Tests
         // Arrange
         auto isWorkerThread = false;
         auto scheduler = SynchronousTaskScheduler();
-        auto task = [&]() -> Task<int> { 
+        auto task = [&]() -> Task<int> {
             isWorkerThread = scheduler.IsWorkerThread();
             co_return 42;
         }();

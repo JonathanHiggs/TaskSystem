@@ -41,4 +41,4 @@ namespace TaskSystem::v1_1
         SetCurrentScheduler(nullptr);
     }
 
-}  // namespace TaskScheduler::v1_1
+}  // namespace TaskSystem::v1_1

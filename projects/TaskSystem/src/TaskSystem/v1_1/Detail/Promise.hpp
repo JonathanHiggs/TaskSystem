@@ -249,8 +249,8 @@ namespace TaskSystem::v1_1::Detail
                 {
                     if (this->continuation)
                     {
-                        auto * scheduler =
-                            FirstOf(this->continuation.Scheduler(), this->continuationScheduler, DefaultScheduler());
+                        auto * scheduler
+                            = FirstOf(this->continuation.Scheduler(), this->continuationScheduler, DefaultScheduler());
 
                         scheduler->Schedule(this->continuation.Handle());
                     }

@@ -25,11 +25,11 @@ namespace TaskSystem::v1_1::Detail
         { }
 
         Continuation(IPromise * promise, std::coroutine_handle<> handle) noexcept
-            : promise(promise), handle(handle), scheduler(nullptr)
+          : promise(promise), handle(handle), scheduler(nullptr)
         { }
 
         Continuation(IPromise * promise, std::coroutine_handle<> handle, ITaskScheduler * scheduler) noexcept
-            : promise(promise), handle(handle), scheduler(scheduler)
+          : promise(promise), handle(handle), scheduler(scheduler)
         { }
 
         [[nodiscard]] operator bool() const noexcept

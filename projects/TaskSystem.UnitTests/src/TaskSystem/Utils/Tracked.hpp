@@ -29,7 +29,8 @@ namespace TaskSystem::Utils
             return *this;
         }
 
-        Tracked(Tracked && other) noexcept : copies(std::exchange(other.copies, 0u)), moves(std::exchange(other.moves, 0u) + 1)
+        Tracked(Tracked && other) noexcept
+          : copies(std::exchange(other.copies, 0u)), moves(std::exchange(other.moves, 0u) + 1)
         { }
 
         Tracked & operator=(Tracked && other) noexcept

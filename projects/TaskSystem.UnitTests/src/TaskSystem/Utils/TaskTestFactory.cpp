@@ -9,4 +9,4 @@ namespace TaskSystem::Utils
         co_return;
     }
 
-}
+}  // namespace TaskSystem::Utils

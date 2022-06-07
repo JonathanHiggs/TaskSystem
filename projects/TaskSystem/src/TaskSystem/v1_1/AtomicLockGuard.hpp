@@ -19,7 +19,9 @@ namespace std
         explicit lock_guard(std::atomic_flag & flag) noexcept : flag(flag)
         {
             // construct and lock
-            while (flag.test_and_set(std::memory_order_acquire)) { }
+            while (flag.test_and_set(std::memory_order_acquire))
+            {
+            }
         }
 
         lock_guard(std::atomic_flag & flag, adopt_lock_t) noexcept : flag(flag)
@@ -46,7 +48,9 @@ namespace std
         explicit lock_guard(std::atomic<bool> & flag) noexcept : flag(flag)
         {
             // construct and lock
-            while (flag.exchange(true, std::memory_order_acquire) != false) { }
+            while (flag.exchange(true, std::memory_order_acquire) != false)
+            {
+            }
         }
 
         lock_guard(std::atomic<bool> & flag, adopt_lock_t) noexcept : flag(flag)
