@@ -23,17 +23,15 @@ namespace TaskSystem::v1_1::Detail
         [[nodiscard]] virtual bool TrySetContinuation(Detail::Continuation value) noexcept = 0;
 
         [[nodiscard]] virtual ITaskScheduler * ContinuationScheduler() const noexcept = 0;
-
         virtual void ContinuationScheduler(ITaskScheduler * value) noexcept = 0;
 
+        [[nodiscard]] virtual ITaskScheduler * TaskScheduler() const noexcept { return nullptr; }
+        virtual void TaskScheduler(ITaskScheduler * value) noexcept { }
+
         [[nodiscard]] virtual bool TrySetScheduled() noexcept = 0;
-
         [[nodiscard]] virtual bool TrySetRunning() noexcept = 0;
-
         [[nodiscard]] virtual bool TrySetSuspended() noexcept = 0;
-
         // ToDo: TrySetCancelled;
-
         [[nodiscard]] virtual bool TrySetException(std::exception_ptr ex) noexcept = 0;
 
         virtual void Wait() const noexcept = 0;

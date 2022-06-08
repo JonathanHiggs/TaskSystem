@@ -3,7 +3,7 @@ Language: Cpp
 # BasedOnStyle: LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: AlwaysBreak
-AlignArrayOfStructures: Right
+AlignArrayOfStructures: None
 AlignConsecutiveMacros: false
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
@@ -15,7 +15,7 @@ AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortEnumsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: false
@@ -38,6 +38,7 @@ BraceWrapping:
   AfterExternBlock: true
   BeforeCatch: true
   BeforeElse: true
+  BeforeLambdaBody: false
   BeforeWhile: true
   IndentBraces: false
   SplitEmptyFunction: false
@@ -114,6 +115,7 @@ NamespaceIndentation: All
 # ObjCBlockIndentWidth: 4
 # ObjCSpaceAfterProperty: false
 # ObjCSpaceBeforeProtocolList: true
+PenaltyReturnTypeOnItsOwnLine: 150
 PPIndentWidth: 4
 # PackConstructorInitializers: NextLine                 ## v14
 PointerAlignment: Middle

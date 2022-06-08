@@ -81,10 +81,7 @@ namespace TaskSystem::v1_1::Detail
             }
         }
 
-        [[nodiscard]] Detail::Continuation const & Continuation() const noexcept override final
-        {
-            return continuation;
-        }
+        [[nodiscard]] Detail::Continuation const & Continuation() const noexcept override final { return continuation; }
 
         // ToDo: TryAddContinuation
         [[nodiscard]] bool TrySetContinuation(Detail::Continuation value) noexcept override final
@@ -111,10 +108,7 @@ namespace TaskSystem::v1_1::Detail
             return continuationScheduler;
         }
 
-        void ContinuationScheduler(ITaskScheduler * value) noexcept override final
-        {
-            continuationScheduler = value;
-        }
+        void ContinuationScheduler(ITaskScheduler * value) noexcept override final { continuationScheduler = value; }
 
         [[nodiscard]] bool TrySetScheduled() noexcept override final
         {

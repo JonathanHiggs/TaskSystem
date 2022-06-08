@@ -2,6 +2,7 @@
 
 #include <TaskSystem/TaskState.hpp>
 #include <TaskSystem/v1_1/AtomicLockGuard.hpp>
+#include <TaskSystem/v1_1/Awaitable.hpp>
 #include <TaskSystem/v1_1/Detail/Continuation.hpp>
 #include <TaskSystem/v1_1/Detail/Promise.hpp>
 #include <TaskSystem/v1_1/Detail/TaskStates.hpp>
@@ -39,13 +40,9 @@ namespace TaskSystem::v1_1
             promise_type & promise;
 
         public:
-            explicit TaskInitialSuspend(promise_type & promise) noexcept : promise(promise)
-            { }
+            explicit TaskInitialSuspend(promise_type & promise) noexcept : promise(promise) { }
 
-            constexpr bool await_ready() const noexcept
-            {
-                return false;
-            }
+            constexpr bool await_ready() const noexcept { return false; }
 
             void await_suspend(std::coroutine_handle<>) const noexcept
             {
@@ -85,13 +82,9 @@ namespace TaskSystem::v1_1
             promise_type & promise;
 
         public:
-            explicit TaskFinalSuspend(promise_type & promise) noexcept : promise(promise)
-            { }
+            explicit TaskFinalSuspend(promise_type & promise) noexcept : promise(promise) { }
 
-            constexpr bool await_ready() const noexcept
-            {
-                return false;
-            }
+            constexpr bool await_ready() const noexcept { return false; }
 
             std::coroutine_handle<> await_suspend(std::coroutine_handle<>) const noexcept
             {
@@ -123,8 +116,7 @@ namespace TaskSystem::v1_1
                 return std::noop_coroutine();
             }
 
-            constexpr void await_resume() const noexcept
-            { }
+            constexpr void await_resume() const noexcept { }
         };
 
         struct TaskPromisePolicy final
@@ -160,30 +152,18 @@ namespace TaskSystem::v1_1
                 return TaskInitialSuspend<promise_type>(*this);
             }
 
-            TaskFinalSuspend<promise_type> final_suspend() noexcept
-            {
-                return TaskFinalSuspend<promise_type>(*this);
-            }
+            TaskFinalSuspend<promise_type> final_suspend() noexcept { return TaskFinalSuspend<promise_type>(*this); }
 
-            void unhandled_exception() noexcept
-            {
-                this->TrySetException(std::current_exception());
-            }
+            void unhandled_exception() noexcept { this->TrySetException(std::current_exception()); }
 
             void return_value(std::convertible_to<TResult> auto && value) noexcept
             {
                 this->TrySetResult(std::forward<decltype(value)>(value));
             }
 
-            [[nodiscard]] ITaskScheduler * TaskScheduler() const noexcept
-            {
-                return taskScheduler;
-            }
+            [[nodiscard]] ITaskScheduler * TaskScheduler() const noexcept override { return taskScheduler; }
 
-            void TaskScheduler(ITaskScheduler * value) noexcept
-            {
-                taskScheduler = value;
-            }
+            void TaskScheduler(ITaskScheduler * value) noexcept override { taskScheduler = value; }
         };
 
         template <typename TResult, bool MoveResult>
@@ -198,29 +178,31 @@ namespace TaskSystem::v1_1
             handle_type handle;
 
         public:
-            TaskAwaitable(handle_type handle) noexcept : handle(handle)
-            { }
+            TaskAwaitable(handle_type handle) noexcept : handle(handle) { }
 
-            constexpr bool await_ready() const noexcept
-            {
-                return false;
-            }
+            constexpr bool await_ready() const noexcept { return false; }
 
             template <typename TPromise>
-            std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> caller) noexcept
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> callerHandle)
+            {
+                IPromise & callerPromise = callerHandle.promise();
+                return await_suspend(callerHandle, callerPromise);
+            }
+
+            inline std::coroutine_handle<> await_suspend(std::coroutine_handle<> callerHandle, IPromise & callerPromise)
             {
                 if (!handle || handle.done() || handle.promise().State().IsCompleted())
                 {
-                    return caller;
+                    return callerHandle;
                 }
 
-                if (!caller.promise().TrySetSuspended())
+                if (!callerPromise.TrySetSuspended())
                 {
-                    // ToDo: what to do here?
-                    assert(false);
+                    throw std::exception("Unable to set caller promise to suspended");
                 }
 
-                if (!handle.promise().TrySetContinuation(Detail::Continuation(&caller.promise(), caller)))
+                if (!handle.promise().TrySetContinuation(
+                        Detail::Continuation(&callerPromise, callerHandle)))  // ToDo: current scheduler?
                 {
                     // throw std::exception("Unable to set continuation");
                     assert(false);
@@ -278,14 +260,12 @@ namespace TaskSystem::v1_1
         handle_type handle;
 
     public:
-        explicit Task(handle_type handle) noexcept : handle(handle)
-        { }
+        explicit Task(handle_type handle) noexcept : handle(handle) { }
 
         Task(Task const &) = delete;
         Task & operator=(Task const &) = delete;
 
-        Task(Task && other) noexcept : handle(std::exchange(other.handle, nullptr))
-        { }
+        Task(Task && other) noexcept : handle(std::exchange(other.handle, nullptr)) { }
 
         Task & operator=(Task && other) noexcept
         {
@@ -345,15 +325,9 @@ namespace TaskSystem::v1_1
             co_return std::forward<TFunc>(func)();
         }
 
-        auto operator co_await() const & noexcept
-        {
-            return Detail::TaskAwaitable<TResult, false>(handle);
-        }
+        auto operator co_await() const & noexcept { return Detail::TaskAwaitable<TResult, false>(handle); }
 
-        auto operator co_await() const && noexcept
-        {
-            return Detail::TaskAwaitable<TResult, true>(handle);
-        }
+        auto operator co_await() const && noexcept { return Detail::TaskAwaitable<TResult, true>(handle); }
 
         [[nodiscard]] TaskState State() const noexcept override
         {
@@ -387,17 +361,17 @@ namespace TaskSystem::v1_1
             return handle.promise().Result();
         }
 
-         [[nodiscard]] TResult && Result() && override
-         {
-             Wait();
-             return std::move(handle.promise().Result());
-         }
+        [[nodiscard]] TResult && Result() && override
+        {
+            Wait();
+            return std::move(handle.promise().Result());
+        }
 
-         [[nodiscard]] TResult const && Result() const && override
-         {
-             Wait();
-             return std::move(handle.promise().Result());
-         }
+        [[nodiscard]] TResult const && Result() const && override
+        {
+            Wait();
+            return std::move(handle.promise().Result());
+        }
 
         Task & ScheduleOn(ITaskScheduler & taskScheduler) &
         {
@@ -421,6 +395,17 @@ namespace TaskSystem::v1_1
         {
             handle.promise().ContinuationScheduler(&taskScheduler);
             return std::move(*this);
+        }
+
+    protected:
+        [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
+        {
+            return Awaitable<TResult>(Detail::TaskAwaitable<TResult, false>(handle));
+        }
+
+        [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
+        {
+            return Awaitable<TResult>(Detail::TaskAwaitable<TResult, true>(handle));
         }
     };
 

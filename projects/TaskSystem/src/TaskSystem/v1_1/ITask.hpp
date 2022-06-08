@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TaskSystem/TaskState.hpp>
+#include <TaskSystem/v1_1/Awaitable.hpp>
 
 
 namespace TaskSystem::v1_1
@@ -12,9 +13,9 @@ namespace TaskSystem::v1_1
     public:
         virtual ~ITask() noexcept = default;
 
-        // ToDo:
-        // virtual IAwaitable operator co_await() const & noexcept;
-        // virtual IAwaitable operator co_await() const && noexcept;
+        Awaitable<TResult> operator co_await() const & noexcept { return GetAwaitable(); }
+
+        Awaitable<TResult> operator co_await() const && noexcept { return GetAwaitable(); }
 
         [[nodiscard]] virtual TaskState State() const noexcept = 0;
 
@@ -27,23 +28,31 @@ namespace TaskSystem::v1_1
         [[nodiscard]] virtual TResult && Result() && = 0;
 
         [[nodiscard]] virtual TResult const && Result() const && = 0;
+
+    protected:
+        [[nodiscard]] virtual Awaitable<TResult> GetAwaitable() const & noexcept = 0;
+        [[nodiscard]] virtual Awaitable<TResult> GetAwaitable() const && noexcept = 0;
     };
 
-    template <>
-    class [[nodiscard]] ITask<void>
-    {
-    public:
-        virtual ~ITask() noexcept = default;
+    //template <>
+    //class [[nodiscard]] ITask<void>
+    //{
+    //public:
+    //    virtual ~ITask() noexcept = default;
 
-        // ToDo:
-        // virtual IAwaitable operator co_await() const & noexcept;
-        // virtual IAwaitable operator co_await() const && noexcept;
+    //    auto operator co_await() const & noexcept { return this->Awaitable(); }
 
-        [[nodiscard]] virtual TaskState State() const noexcept = 0;
+    //    auto operator co_await() const && noexcept { return this->Awaitable(); }
 
-        virtual void Wait() const noexcept = 0;
+    //    [[nodiscard]] virtual TaskState State() const noexcept = 0;
 
-        [[nodiscard]] virtual void ThrowIfFaulted() const = 0;
-    };
+    //    virtual void Wait() const noexcept = 0;
+
+    //    [[nodiscard]] virtual void ThrowIfFaulted() const = 0;
+
+    //protected:
+    //    [[nodiscard]] virtual Detail::IAwaitable<void> Awaitable() const & noexcept = 0;
+    //    [[nodiscard]] virtual Detail::IAwaitable<void> Awaitable() const && noexcept = 0;
+    //};
 
 }  // namespace TaskSystem::v1_1
