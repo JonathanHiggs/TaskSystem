@@ -30,7 +30,7 @@ namespace TaskSystem::v1_1
         };
 
         template <typename TResult>
-        using TaskCompletionSourcePromise = Promise<TaskCompletionSourcePromisePolicy, TResult>;
+        using TaskCompletionSourcePromise = Promise<TResult, TaskCompletionSourcePromisePolicy>;
 
         template <typename TResult, bool MoveResult>
         class TaskCompletionSourceAwaitable final

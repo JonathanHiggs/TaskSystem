@@ -129,7 +129,7 @@ namespace TaskSystem::v1_1
 
         // Maybe: template on the exception type rather than assuming exception_ptr?
         template <typename TResult>
-        class TaskPromise final : public Promise<TaskPromisePolicy, TResult>
+        class TaskPromise final : public Promise<TResult, TaskPromisePolicy>
         {
         public:
             using value_type = TResult;

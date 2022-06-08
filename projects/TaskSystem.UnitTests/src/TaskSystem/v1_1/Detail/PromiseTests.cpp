@@ -32,7 +32,7 @@ namespace TaskSystem::v1_1::Detail::Tests
         void TrySetScheduledFromCreated(bool expected)
         {
             // Arrange
-            auto promise = Promise<TPolicy, TResult>();
+            auto promise = Promise<TResult, TPolicy>();
 
             // A-priori
             EXPECT_EQ(promise.State(), TaskState::Created);
@@ -65,7 +65,7 @@ namespace TaskSystem::v1_1::Detail::Tests
     TEST(PromiseTests, trySetScheduledFromRunningFails)
     {
         // Arrange
-        auto promise = Promise<RunnablePromisePolicy, int>();
+        auto promise = Promise<int, RunnablePromisePolicy>();
 
         // A-priori
         EXPECT_TRUE(promise.TrySetRunning());
@@ -80,7 +80,7 @@ namespace TaskSystem::v1_1::Detail::Tests
     TEST(PromiseTests, trySetScheduledFromSuspended)
     {
         // Arrange
-        auto promise = Promise<RunnablePromisePolicy, int>();
+        auto promise = Promise<int, RunnablePromisePolicy>();
 
         // A-priori
         EXPECT_TRUE(promise.TrySetRunning());
@@ -100,7 +100,7 @@ namespace TaskSystem::v1_1::Detail::Tests
         void TrySetRunningFromCreated(bool expected)
         {
             // Arrange
-            auto promise = Promise<TPolicy, TResult>();
+            auto promise = Promise<TResult, TPolicy>();
 
             // A-priori
             EXPECT_EQ(promise.State(), TaskState::Created);
@@ -136,7 +136,7 @@ namespace TaskSystem::v1_1::Detail::Tests
         void TrySetRunningFromScheduled()
         {
             // Arrange
-            auto promise = Promise<TPolicy, TResult>();
+            auto promise = Promise<TResult, TPolicy>();
 
             // A-priori
             EXPECT_TRUE(promise.TrySetScheduled());
@@ -162,7 +162,7 @@ namespace TaskSystem::v1_1::Detail::Tests
         void TrySetSuspendedFromRunning()
         {
             // Arrange
-            auto promise = Promise<TPolicy, TResult>();
+            auto promise = Promise<TResult, TPolicy>();
 
             // A-priori
             EXPECT_TRUE(promise.TrySetRunning());
@@ -188,7 +188,7 @@ namespace TaskSystem::v1_1::Detail::Tests
         void TrySetRunningFromSuspended()
         {
             // Arrange
-            auto promise = Promise<TPolicy, TResult>();
+            auto promise = Promise<TResult, TPolicy>();
 
             // A-priori
             EXPECT_TRUE(promise.TrySetRunning());
@@ -213,7 +213,7 @@ namespace TaskSystem::v1_1::Detail::Tests
     {
         // Arrange
         auto expected = 42;
-        auto promise = Promise<RunnablePromisePolicy, int>();
+        auto promise = Promise<int, RunnablePromisePolicy>();
 
         // Act
         auto result = promise.TrySetResult(expected);
@@ -228,7 +228,7 @@ namespace TaskSystem::v1_1::Detail::Tests
     {
         // Arrange
         auto expected = 42;
-        auto promise = Promise<RunnablePromisePolicy, int>();
+        auto promise = Promise<int, RunnablePromisePolicy>();
 
         // A-priori
         EXPECT_TRUE(promise.TrySetScheduled());
@@ -244,7 +244,7 @@ namespace TaskSystem::v1_1::Detail::Tests
     {
         // Arrange
         auto expected = 42;
-        auto promise = Promise<RunnablePromisePolicy, int>();
+        auto promise = Promise<int, RunnablePromisePolicy>();
 
         // A-priori
         EXPECT_TRUE(promise.TrySetRunning());
@@ -262,7 +262,7 @@ namespace TaskSystem::v1_1::Detail::Tests
     {
         // Arrange
         auto expected = 42;
-        auto promise = Promise<RunnablePromisePolicy, int>();
+        auto promise = Promise<int, RunnablePromisePolicy>();
 
         // A-priori
         EXPECT_TRUE(promise.TrySetRunning());

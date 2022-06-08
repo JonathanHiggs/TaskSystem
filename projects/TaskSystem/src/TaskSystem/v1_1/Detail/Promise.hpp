@@ -31,7 +31,7 @@ namespace TaskSystem::v1_1::Detail
         // clang-format on
     };
 
-    template <PromisePolicy TPolicy, typename TResult>
+    template <typename TResult, PromisePolicy TPolicy>
     class PromiseBase : public IPromise
     {
     protected:
@@ -207,8 +207,8 @@ namespace TaskSystem::v1_1::Detail
         }
     };
 
-    template <PromisePolicy TPolicy, typename TResult>
-    class Promise : public PromiseBase<TPolicy, TResult>
+    template <typename TResult, PromisePolicy TPolicy>
+    class Promise : public PromiseBase<TResult, TPolicy>
     {
     public:
         ~Promise() noexcept override = default;
@@ -323,7 +323,7 @@ namespace TaskSystem::v1_1::Detail
     };
 
     template <PromisePolicy TPolicy>
-    class Promise<TPolicy, void> : public PromiseBase<TPolicy, void>
+    class Promise<void, TPolicy> : public PromiseBase<void, TPolicy>
     {
     public:
         ~Promise() noexcept override = default;
