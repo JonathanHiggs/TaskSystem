@@ -34,25 +34,25 @@ namespace TaskSystem::v1_1
         [[nodiscard]] virtual Awaitable<TResult> GetAwaitable() const && noexcept = 0;
     };
 
-    //template <>
-    //class [[nodiscard]] ITask<void>
-    //{
-    //public:
-    //    virtual ~ITask() noexcept = default;
+    template <>
+    class [[nodiscard]] ITask<void>
+    {
+    public:
+        virtual ~ITask() noexcept = default;
 
-    //    auto operator co_await() const & noexcept { return this->Awaitable(); }
+        Awaitable<void> operator co_await() const & noexcept { return GetAwaitable(); }
 
-    //    auto operator co_await() const && noexcept { return this->Awaitable(); }
+        Awaitable<void> operator co_await() const && noexcept { return GetAwaitable(); }
 
-    //    [[nodiscard]] virtual TaskState State() const noexcept = 0;
+        [[nodiscard]] virtual TaskState State() const noexcept = 0;
 
-    //    virtual void Wait() const noexcept = 0;
+        virtual void Wait() const noexcept = 0;
 
-    //    [[nodiscard]] virtual void ThrowIfFaulted() const = 0;
+        [[nodiscard]] virtual void ThrowIfFaulted() const = 0;
 
-    //protected:
-    //    [[nodiscard]] virtual Detail::IAwaitable<void> Awaitable() const & noexcept = 0;
-    //    [[nodiscard]] virtual Detail::IAwaitable<void> Awaitable() const && noexcept = 0;
-    //};
+    protected:
+        [[nodiscard]] virtual Awaitable<void> GetAwaitable() const & noexcept = 0;
+        [[nodiscard]] virtual Awaitable<void> GetAwaitable() const && noexcept = 0;
+    };
 
 }  // namespace TaskSystem::v1_1

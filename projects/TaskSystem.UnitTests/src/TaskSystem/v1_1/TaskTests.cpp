@@ -41,6 +41,32 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), expected);
     }
 
+    TEST(TaskTests_v1_1, voidTaskLambda)
+    {
+        // Arrange
+        auto started = false;
+
+        auto task = [&]() -> Task<void> {
+            started = true;
+            co_return;
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        scheduler.Schedule(task);
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
+
+        EXPECT_FALSE(started);
+
+        scheduler.Run();
+
+        EXPECT_TRUE(started);
+        EXPECT_EQ(task.State(), TaskState::Completed);
+    }
+
     TEST(TaskTests_v1_1, taskLambdaThatThrows)
     {
         // Arrange
@@ -74,6 +100,38 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_THROW(task.Result(), std::exception);
     }
 
+    TEST(TaskTests_v1_1, voidTaskLambdaThatThrows)
+    {
+        // Arrange
+        auto started = false;
+        auto completed = false;
+
+        auto task = [&]() -> Task<void> {
+            started = true;
+            throw std::exception();
+            completed = true;
+            co_return;
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        scheduler.Schedule(task);
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
+
+        EXPECT_FALSE(started);
+
+        scheduler.Run();
+
+        EXPECT_TRUE(started);
+        EXPECT_FALSE(completed);
+        EXPECT_EQ(task.State(), TaskState::Error);
+
+        EXPECT_THROW(task.ThrowIfFaulted(), std::exception);
+    }
+
     TEST(TaskTests_v1_1, taskFrom)
     {
         // Arrange
@@ -100,6 +158,29 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(started);
         EXPECT_EQ(task.State(), TaskState::Completed);
         EXPECT_EQ(task.Result(), expected);
+    }
+
+    TEST(TaskTests_v1_1, voidTaskFrom)
+    {
+        // Arrange
+        auto started = false;
+
+        auto task = Task<void>::From([&]() { started = true; });
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        scheduler.Schedule(task);
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
+
+        EXPECT_FALSE(started);
+
+        scheduler.Run();
+
+        EXPECT_TRUE(started);
+        EXPECT_EQ(task.State(), TaskState::Completed);
     }
 
     TEST(TaskTests_v1_1, taskFromThatThrows)
@@ -169,6 +250,39 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(innerTask.Result(), expected);
     }
 
+    TEST(TaskTests_v1_1, awaitedTaskCreatedInTask)
+    {
+        // Arrange
+        auto started = false;
+        auto expected = 42;
+        auto innerTaskFn = [&]() -> Task<int> {
+            started = true;
+            co_return expected;
+        };
+
+        auto task = [&]() -> Task<int> {
+            auto inner = co_await innerTaskFn();
+            EXPECT_EQ(inner, expected);
+            co_return inner;
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        scheduler.Schedule(task);
+
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
+        EXPECT_FALSE(started);
+
+        scheduler.Run();
+
+        EXPECT_TRUE(started);
+        EXPECT_EQ(task.State(), TaskState::Completed);
+        EXPECT_EQ(task.Result(), expected);
+    }
+
     TEST(TaskTests_v1_1, taskWithAwaitedTaskThatThrowsPropogatesError)
     {
         // Arrange
@@ -225,6 +339,7 @@ namespace TaskSystem::v1_1::Tests
         // Arrange
         auto scheduler1 = SynchronousTaskScheduler();
         auto scheduler2 = SynchronousTaskScheduler();
+        auto scheduler3 = SynchronousTaskScheduler();
 
         auto expected = 42;
 
@@ -242,21 +357,21 @@ namespace TaskSystem::v1_1::Tests
 
         auto task = [&]() -> Task<int> {
             taskStarted = true;
-            EXPECT_EQ(CurrentScheduler(), &scheduler2);
+            EXPECT_EQ(CurrentScheduler(), &scheduler3);
             auto value = co_await innerTask;
             EXPECT_EQ(CurrentScheduler(), &scheduler2);
             taskCompleted = true;
             co_return value;
         }();
 
-        scheduler2.Schedule(task);
+        scheduler3.Schedule(task);
 
         // Act & Assert
         EXPECT_EQ(innerTask.State(), TaskState::Created);
         EXPECT_EQ(task.State(), TaskState::Scheduled);
         EXPECT_FALSE(taskStarted);
 
-        scheduler2.Run();  // Run task up-to awaiting innerTask
+        scheduler3.Run();  // Run task up-to awaiting innerTask
 
         EXPECT_EQ(innerTask.State(), TaskState::Scheduled);
         EXPECT_FALSE(innerTaskCompleted);

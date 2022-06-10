@@ -347,16 +347,11 @@ namespace TaskSystem::v1_1::Detail
             return true;
         }
 
-        // Maybe: just keep it void Result()?
-        [[nodiscard]] void ThrowIfUncompleteOrFaulted() const
+        [[nodiscard]] void ThrowIfFaulted() const
         {
             std::lock_guard lock(this->stateFlag);
 
-            if (this->StateIsOneOf<Created, Scheduled, Running, Suspended>())
-            {
-                throw std::exception("Task is not complete");
-            }
-            else if (auto * fault = std::get_if<Faulted>(&this->state))
+            if (auto * fault = std::get_if<Faulted>(&this->state))
             {
                 std::rethrow_exception(fault->Exception);
             }
