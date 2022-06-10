@@ -9,6 +9,8 @@
 
 using namespace std::chrono_literals;
 
+using TaskSystem::Utils::Tracked;
+
 
 namespace TaskSystem::v1_1::Tests
 {
@@ -41,7 +43,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), expected);
     }
 
-    TEST(TaskTests_v1_1, taskReturnReference)
+    TEST(TaskTests_v1_1, taskReturnsReference)
     {
         // Arrange
         bool started = false;
@@ -67,6 +69,34 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(started);
         EXPECT_EQ(task.State(), TaskState::Completed);
         EXPECT_EQ(std::addressof(task.Result()), std::addressof(expected));
+    }
+
+    TEST(TaskTests_v1_1, taskReturnsPointer)
+    {
+        // Arrange
+        bool started = false;
+        auto expected = 42;
+
+        auto task = [&]() -> Task<int *> {
+            started = true;
+            co_return &expected;
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        scheduler.Schedule(task);
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
+
+        EXPECT_FALSE(started);
+
+        scheduler.Run();
+
+        EXPECT_TRUE(started);
+        EXPECT_EQ(task.State(), TaskState::Completed);
+        EXPECT_EQ(task.Result(), &expected);
     }
 
     TEST(TaskTests_v1_1, voidTaskLambda)
@@ -484,6 +514,30 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(completed);
     }
 
+    TEST(TaskTests_v1_1, awaitTaskOnThread)
+    {
+        // Arrange
+        auto expected = 42;
+        auto result = 0;
+        auto scheduler = SynchronousTaskScheduler();
+
+        auto task = [&]() -> Task<int> { co_return expected; }();
+        auto workerTask = [&]() -> Task<int> { co_return co_await task; }();
+
+        // Act
+        std::thread worker([&]() {
+            result = workerTask.Result();
+        });
+
+        scheduler.Schedule(task);
+        scheduler.Schedule(workerTask);
+        scheduler.Run();
+        worker.join();
+
+        // Assert
+        EXPECT_EQ(result, expected);
+    }
+
     TEST(TaskTests_v1_1, waitContinuesOnTaskException)
     {
         // Arrange
@@ -517,6 +571,73 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(completed);
     }
 
-    // tracked copy and move number
+    TEST(TaskTests_v1_1, LValueTestReturnByValueNeverCopied)
+    {
+        // Arrange
+        auto task = []() -> Task<Tracked> { co_return Tracked(); }();
+
+        auto scheduler = SynchronousTaskScheduler();
+        scheduler.Schedule(task);
+
+        // Act
+        scheduler.Run();
+        auto & result = task.Result();
+
+        // Assert
+        EXPECT_EQ(result.Copies(), 0u);
+        EXPECT_GT(result.Moves(), 1u);
+    }
+
+    TEST(TaskTests_v1_1, LValueReturnByRefNeverCopiedOrMoved)
+    {
+        // Arrange
+        auto tracked = Tracked();
+        auto task = [&]() -> Task<Tracked &> { co_return tracked; }();
+
+        auto scheduler = SynchronousTaskScheduler();
+        scheduler.Schedule(task);
+
+        // Act
+        scheduler.Run();
+        auto & result = task.Result();
+
+        // Assert
+        EXPECT_EQ(result.Copies(), 0u);
+        EXPECT_EQ(result.Moves(), 0u);
+    }
+
+    TEST(TaskTests_v1_1, RValueTestReturnByValueNeverCopied)
+    {
+        // Arrange
+        auto task = []() -> Task<Tracked> { co_return Tracked(); }();
+
+        auto scheduler = SynchronousTaskScheduler();
+        scheduler.Schedule(task);
+
+        // Act
+        scheduler.Run();
+        auto & result = task.Result();
+
+        // Assert
+        EXPECT_EQ(result.Copies(), 0u);
+        EXPECT_GT(result.Moves(), 1u);
+    }
+
+    TEST(TaskTests_v1_1, RValueTestReturnByRefNeverCopiedOrMoved)
+    {
+        // Arrange
+        auto tracked = Tracked();
+        auto scheduler = SynchronousTaskScheduler();
+
+        auto task = [&]() -> Task<Tracked &> { co_return tracked; }();
+        scheduler.Schedule(task);
+
+        // Act
+        scheduler.Run();
+
+        // Assert
+        EXPECT_EQ(tracked.Copies(), 0u);
+        EXPECT_EQ(tracked.Moves(), 0u);
+    }
 
 }  // namespace TaskSystem::v1_1::Tests

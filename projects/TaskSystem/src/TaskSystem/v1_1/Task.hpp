@@ -468,9 +468,9 @@ namespace TaskSystem::v1_1
 
         // ToDo: use concept
         template <typename TFunc, std::enable_if_t<std::is_same_v<TResult, std::invoke_result_t<TFunc>>> * = nullptr>
-        static void Run(TFunc && func, ITaskScheduler * scheduler)
+        static void Run(TFunc && func, ITaskScheduler & scheduler)
         {
-            scheduler->Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
+            scheduler.Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
         }
 
         [[nodiscard]] TResult & Result() & override
@@ -570,9 +570,9 @@ namespace TaskSystem::v1_1
 
         // ToDo: use concept
         template <typename TFunc, std::enable_if_t<std::is_same_v<TResult, std::invoke_result_t<TFunc>>> * = nullptr>
-        static void Run(TFunc && func, ITaskScheduler * scheduler)
+        static void Run(TFunc && func, ITaskScheduler & scheduler)
         {
-            scheduler->Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
+            scheduler.Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
         }
 
         [[nodiscard]] TResult & Result() override
@@ -651,9 +651,9 @@ namespace TaskSystem::v1_1
 
         // ToDo: use concept
         template <typename TFunc, std::enable_if_t<std::is_void_v<std::invoke_result_t<TFunc>>> * = nullptr>
-        static void Run(TFunc && func, ITaskScheduler * scheduler)
+        static void Run(TFunc && func, ITaskScheduler & scheduler)
         {
-            scheduler->Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
+            scheduler.Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
         }
 
         void ThrowIfFaulted() const override
