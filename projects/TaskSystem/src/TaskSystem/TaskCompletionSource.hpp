@@ -18,6 +18,7 @@
 
 namespace TaskSystem
 {
+
     namespace Detail
     {
 
@@ -79,140 +80,263 @@ namespace TaskSystem
 
             TResult await_resume()
             {
-                if constexpr (MoveResult)
+                if constexpr (!std::same_as<TResult, void>)
                 {
-                    return std::move(promise).Result();
+                    if constexpr (MoveResult)
+                    {
+                        return std::move(promise).Result();
+                    }
+                    else
+                    {
+                        return promise.Result();
+                    }
                 }
-                else
-                {
-                    return promise.Result();
-                }
+            }
+        };
+
+#pragma region Task
+
+        template <typename TResult>
+        class CompletionTaskBase : public ITask<TResult>
+        {
+        public:
+            using value_type = TResult;
+            using promise_type = Detail::TaskCompletionSourcePromise<TResult>;
+            using handle_type = void;
+
+        protected:
+            promise_type & promise;
+
+        public:
+            ~CompletionTaskBase() noexcept override = default;
+
+            explicit CompletionTaskBase(promise_type & promise) noexcept : promise(promise) { }
+
+            auto operator co_await() const & noexcept { return TaskCompletionSourceAwaitable<TResult, false>(promise); }
+            auto operator co_await() const && noexcept { return TaskCompletionSourceAwaitable<TResult, true>(promise); }
+
+            [[nodiscard]] TaskState State() const noexcept override { return promise.State(); }
+
+            void Wait() const noexcept override { return promise.Wait(); }
+
+            void ScheduleOn(ITaskScheduler & taskScheduler) & { }
+
+            void ContinueOn(ITaskScheduler & taskScheduler) & { promise.ContinuationScheduler(&taskScheduler); }
+
+        protected:
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
+            {
+                return Awaitable<TResult>(Detail::TaskCompletionSourceAwaitable<TResult, false>(promise));
+            }
+
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
+            {
+                return Awaitable<TResult>(Detail::TaskCompletionSourceAwaitable<TResult, true>(promise));
             }
         };
 
     }  // namespace Detail
 
     template <typename TResult>
-    class [[nodiscard]] Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> final : public ITask<TResult>
+    class [[nodiscard]] Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> final
+      : public Detail::CompletionTaskBase<TResult>
     {
     public:
-        using value_type = TResult;
-        using promise_type = Detail::TaskCompletionSourcePromise<TResult>;
+        using base_type = Detail::CompletionTaskBase<TResult>;
 
-    private:
-        promise_type & promise;
+        using value_type = base_type::value_type;
+        using promise_type = base_type::promise_type;
+        using handle_type = base_type::handle_type;
 
     public:
+        explicit Task(promise_type & promise) noexcept : base_type(promise) { }
+
         ~Task() noexcept override = default;
-
-        explicit Task(promise_type & promise) noexcept : promise(promise) { }
-
-        auto operator co_await() const & noexcept
-        {
-            return Detail::TaskCompletionSourceAwaitable<TResult, false>(promise);
-        }
-
-        auto operator co_await() const && noexcept
-        {
-            return Detail::TaskCompletionSourceAwaitable<TResult, true>(promise);
-        }
-
-        [[nodiscard]] TaskState State() const noexcept override { return promise.State(); }
-
-        void Wait() const noexcept override { return promise.Wait(); }
 
         [[nodiscard]] TResult & Result() & override
         {
-            Wait();
-            return promise.Result();
+            this->Wait();
+            return this->promise.Result();
         }
 
         [[nodiscard]] TResult const & Result() const & override
         {
-            Wait();
-            return promise.Result();
+            this->Wait();
+            return this->promise.Result();
         }
 
         [[nodiscard]] TResult && Result() && override
         {
-            Wait();
-            return std::move(promise.Result());
+            this->Wait();
+            return std::move(this->promise.Result());
         }
 
         [[nodiscard]] TResult const && Result() const && override
         {
-            Wait();
-            return std::move(promise.Result());
+            this->Wait();
+            return std::move(this->promise.Result());
         }
 
-    protected:
-        [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
         {
-            return Awaitable<TResult>(Detail::TaskCompletionSourceAwaitable<TResult, false>(promise));
-        }
-
-        [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
-        {
-            return Awaitable<TResult>(Detail::TaskCompletionSourceAwaitable<TResult, true>(promise));
+            this->promise.ContinuationScheduler(&taskScheduler);
+            return std::move(*this);
         }
     };
 
     template <typename TResult>
-    class TaskCompletionSource
+    class [[nodiscard]] Task<TResult &, Detail::TaskCompletionSourcePromise<TResult &>> final
+      : public Detail::CompletionTaskBase<TResult &>
     {
-    private:
-        Detail::TaskCompletionSourcePromise<TResult> promise;
+    public:
+        using base_type = Detail::CompletionTaskBase<TResult &>;
+
+        using value_type = base_type::value_type;
+        using promise_type = base_type::promise_type;
+        using handle_type = base_type::handle_type;
 
     public:
-        TaskCompletionSource() noexcept = default;
+        explicit Task(promise_type & promise) noexcept : base_type(promise) { }
 
-        TaskCompletionSource(TaskCompletionSource const &) = delete;
-        TaskCompletionSource & operator=(TaskCompletionSource const &) = delete;
+        ~Task() noexcept override = default;
 
-        TaskCompletionSource(TaskCompletionSource &&) = delete;
-        TaskCompletionSource & operator=(TaskCompletionSource &&) = delete;
-
-        [[nodiscard]] ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> Task()
+        [[nodiscard]] TResult & Result() override
         {
-            return ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>>(promise);
+            this->Wait();
+            return this->promise.Result();
         }
 
+        [[nodiscard]] TResult const & Result() const override
+        {
+            this->Wait();
+            return this->promise.Result();
+        }
+
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->promise.ContinuationScheduler(&taskScheduler);
+            return std::move(*this);
+        }
+    };
+
+    template <>
+    class [[nodiscard]] Task<void, Detail::TaskCompletionSourcePromise<void>> final
+      : public Detail::CompletionTaskBase<void>
+    {
+    public:
+        using base_type = Detail::CompletionTaskBase<void>;
+
+        using value_type = base_type::value_type;
+        using promise_type = base_type::promise_type;
+        using handle_type = base_type::handle_type;
+
+    public:
+        explicit Task(promise_type & promise) noexcept : base_type(promise) { }
+
+        ~Task() noexcept override = default;
+
+        void ThrowIfFaulted() const override
+        {
+            this->Wait();
+            this->promise.ThrowIfFaulted();
+        }
+
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->promise.ContinuationScheduler(&taskScheduler);
+            return std::move(*this);
+        }
+    };
+
+#pragma endregion
+
+#pragma region TaskCompletionSource
+
+    namespace Detail
+    {
+
+        template <typename TResult>
+        class TaskCompletionSourceBase
+        {
+        protected:
+            Detail::TaskCompletionSourcePromise<TResult> promise;
+
+        public:
+            TaskCompletionSourceBase() noexcept = default;
+
+            TaskCompletionSourceBase(TaskCompletionSourceBase const &) = delete;
+            TaskCompletionSourceBase & operator=(TaskCompletionSourceBase const &) = delete;
+
+            TaskCompletionSourceBase(TaskCompletionSourceBase &&) = delete;
+            TaskCompletionSourceBase & operator=(TaskCompletionSourceBase &&) = delete;
+
+            virtual ~TaskCompletionSourceBase() noexcept = default;
+
+            [[nodiscard]] ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> Task()
+            {
+                return ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>>(promise);
+            }
+
+            template <typename TException, std::enable_if_t<!std::is_same_v<TException, std::exception_ptr>> * = nullptr>
+            [[nodiscard]] bool TrySetException(TException && exception) noexcept
+            {
+                return promise.TrySetException(std::make_exception_ptr(std::forward<TException>(exception)));
+            }
+
+            template <typename TException, std::enable_if_t<std::is_same_v<TException, std::exception_ptr>> * = nullptr>
+            [[nodiscard]] bool TrySetException(std::exception_ptr exception) noexcept
+            {
+                return promise.TrySetException(exception);
+            }
+
+            template <typename TException>
+            void SetException(TException && exception)
+            {
+                auto result = TrySetException(std::forward<TException>(exception));
+                if (!result)
+                {
+                    throw std::exception("Unable to set exception");
+                }
+            }
+        };
+
+    }
+
+    template <typename TResult>
+    class TaskCompletionSource final : public Detail::TaskCompletionSourceBase<TResult>
+    {
+    public:
         template <typename TValue, std::enable_if_t<std::is_convertible_v<TValue &&, TResult>> * = nullptr>
         [[nodiscard]] bool TrySetResult(TValue && value) noexcept(
             std::is_nothrow_constructible_v<TResult, decltype(value)>)
         {
-            return promise.TrySetResult(std::forward<TValue>(value));
+            return this->promise.TrySetResult(std::forward<TValue>(value));
         }
 
         template <typename TValue, std::enable_if_t<std::is_convertible_v<TValue &&, TResult>> * = nullptr>
         void SetResult(TValue && value)
         {
-            auto result = TrySetResult(std::forward<TValue>(value));
-            if (!result)
+            if (!TrySetResult(std::forward<TValue>(value)))
             {
                 throw std::exception("Unable to set value");
             }
         }
+    };
 
-        template <typename TException, std::enable_if_t<!std::is_same_v<TException, std::exception_ptr>> * = nullptr>
-        [[nodiscard]] bool TrySetException(TException && exception) noexcept
+    template <>
+    class TaskCompletionSource<void> final : public Detail::TaskCompletionSourceBase<void>
+    {
+    public:
+        [[nodiscard]] bool TrySetCompleted() noexcept
         {
-            return promise.TrySetException(std::make_exception_ptr(std::forward<TException>(exception)));
+            return this->promise.TrySetCompleted();
         }
 
-        template <typename TException, std::enable_if_t<std::is_same_v<TException, std::exception_ptr>> * = nullptr>
-        [[nodiscard]] bool TrySetException(std::exception_ptr exception) noexcept
+        void SetCompleted()
         {
-            return promise.TrySetException(exception);
-        }
-
-        template <typename TException>
-        void SetException(TException && exception)
-        {
-            auto result = TrySetException(std::forward<TException>(exception));
-            if (!result)
+            if (!TrySetCompleted())
             {
-                throw std::exception("Unable to set exception");
+                throw std::exception("Unable to set completed");
             }
         }
     };

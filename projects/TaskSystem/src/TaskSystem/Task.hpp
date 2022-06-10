@@ -402,16 +402,11 @@ namespace TaskSystem
                 handle.promise().Wait();
             }
 
-            void ScheduleOn(ITaskScheduler & taskScheduler) &
-            {
-                handle.promise().TaskScheduler(&taskScheduler);
-                return *this;
-            }
+            void ScheduleOn(ITaskScheduler & taskScheduler) & { handle.promise().TaskScheduler(&taskScheduler); }
 
             void ContinueOn(ITaskScheduler & taskScheduler) &
             {
                 handle.promise().ContinuationScheduler(&taskScheduler);
-                return *this;
             }
 
         protected:
@@ -434,9 +429,9 @@ namespace TaskSystem
     public:
         using base_type = Detail::TaskBase<TResult>;
 
-        using value_type = TResult;
-        using promise_type = Detail::TaskPromise<TResult>;
-        using handle_type = std::coroutine_handle<promise_type>;
+        using value_type = base_type::value_type;
+        using promise_type = base_type::promise_type;
+        using handle_type = base_type::handle_type;
 
     public:
         explicit Task(handle_type handle) noexcept : base_type(handle) { }
@@ -536,9 +531,9 @@ namespace TaskSystem
     public:
         using base_type = Detail::TaskBase<TResult &>;
 
-        using value_type = TResult &;
-        using promise_type = Detail::TaskPromise<TResult &>;
-        using handle_type = std::coroutine_handle<promise_type>;
+        using value_type = base_type::value_type;
+        using promise_type = base_type::promise_type;
+        using handle_type = base_type::handle_type;
 
     public:
         explicit Task(handle_type handle) noexcept : base_type(handle) { }
@@ -616,9 +611,9 @@ namespace TaskSystem
     public:
         using base_type = Detail::TaskBase<void>;
 
-        using value_type = void;
-        using promise_type = Detail::TaskPromise<void>;
-        using handle_type = std::coroutine_handle<promise_type>;
+        using value_type = base_type::value_type;
+        using promise_type = base_type::promise_type;
+        using handle_type = base_type::handle_type;
 
     public:
         explicit Task(handle_type handle) noexcept : base_type(handle) { }

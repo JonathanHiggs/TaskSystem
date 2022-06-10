@@ -7,6 +7,52 @@
 namespace TaskSystem::Tests
 {
 
+    TEST(TaskCompletionSourceTests, returnByValue)
+    {
+        // Arrange
+        auto expected = 42;
+        auto taskCompletionSource = TaskCompletionSource<int>();
+        auto task = taskCompletionSource.Task();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        taskCompletionSource.SetResult(expected);
+
+        EXPECT_EQ(task.State(), TaskState::Completed);
+        EXPECT_EQ(task.Result(), expected);
+    }
+
+    TEST(TaskCompletionSourceTests, returnByRef)
+    {
+        // Arrange
+        auto expected = 42;
+        auto taskCompletionSource = TaskCompletionSource<int &>();
+        auto task = taskCompletionSource.Task();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        taskCompletionSource.SetResult(expected);
+
+        EXPECT_EQ(task.State(), TaskState::Completed);
+        EXPECT_EQ(&task.Result(), &expected);
+    }
+
+    TEST(TaskCompletionSourceTests, returnVoid)
+    {
+        // Arrange
+        auto taskCompletionSource = TaskCompletionSource<void>();
+        auto task = taskCompletionSource.Task();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        taskCompletionSource.SetCompleted();
+
+        EXPECT_EQ(task.State(), TaskState::Completed);
+    }
+
     TEST(TaskCompletionSourceTests, trySetResultCompletesTask)
     {
         // Arrange
