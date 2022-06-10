@@ -1,13 +1,13 @@
 #pragma once
 
-#include <TaskSystem/v1_1/ITaskScheduler.hpp>
+#include <TaskSystem/ITaskScheduler.hpp>
 
 #include <optional>
 #include <queue>
 #include <thread>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
 
     class SynchronousTaskScheduler final : public ITaskScheduler
@@ -28,4 +28,4 @@ namespace TaskSystem::v1_1
         void Run();
     };
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

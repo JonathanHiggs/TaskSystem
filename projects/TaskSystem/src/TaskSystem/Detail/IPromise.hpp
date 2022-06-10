@@ -1,13 +1,13 @@
 #pragma once
 
+#include <TaskSystem/Detail/Continuation.hpp>
+#include <TaskSystem/ITaskScheduler.hpp>
 #include <TaskSystem/TaskState.hpp>
-#include <TaskSystem/v1_1/Detail/Continuation.hpp>
-#include <TaskSystem/v1_1/ITaskScheduler.hpp>
 
 #include <exception>
 
 
-namespace TaskSystem::v1_1::Detail
+namespace TaskSystem::Detail
 {
 
     class IPromise
@@ -40,4 +40,4 @@ namespace TaskSystem::v1_1::Detail
     template <typename T>
     concept PromiseType = std::derived_from<T, IPromise>;
 
-}  // namespace TaskSystem::v1_1::Detail
+}  // namespace TaskSystem::Detail

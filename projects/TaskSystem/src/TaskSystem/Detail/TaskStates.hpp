@@ -4,7 +4,7 @@
 #include <variant>
 
 
-namespace TaskSystem::v1_1::Detail
+namespace TaskSystem::Detail
 {
 
     struct Created final : std::monostate
@@ -43,4 +43,4 @@ namespace TaskSystem::v1_1::Detail
         std::exception_ptr Exception;
     };
 
-}  // namespace TaskSystem::v1_1::Detail
+}  // namespace TaskSystem::Detail

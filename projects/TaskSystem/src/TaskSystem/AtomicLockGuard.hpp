@@ -24,13 +24,9 @@ namespace std
             }
         }
 
-        lock_guard(std::atomic_flag & flag, adopt_lock_t) noexcept : flag(flag)
-        { }  // construct but don't lock
+        lock_guard(std::atomic_flag & flag, adopt_lock_t) noexcept : flag(flag) { }  // construct but don't lock
 
-        ~lock_guard() noexcept
-        {
-            flag.clear(std::memory_order_release);
-        }
+        ~lock_guard() noexcept { flag.clear(std::memory_order_release); }
 
         lock_guard(lock_guard const &) = delete;
         lock_guard & operator=(lock_guard const &) = delete;
@@ -53,13 +49,9 @@ namespace std
             }
         }
 
-        lock_guard(std::atomic<bool> & flag, adopt_lock_t) noexcept : flag(flag)
-        { }  // construct but don't lock
+        lock_guard(std::atomic<bool> & flag, adopt_lock_t) noexcept : flag(flag) { }  // construct but don't lock
 
-        ~lock_guard() noexcept
-        {
-            flag.store(false, std::memory_order_release);
-        }
+        ~lock_guard() noexcept { flag.store(false, std::memory_order_release); }
 
         lock_guard(lock_guard const &) = delete;
         lock_guard & operator=(lock_guard const &) = delete;

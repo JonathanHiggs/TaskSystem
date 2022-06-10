@@ -6,7 +6,7 @@
 #include <variant>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
 
     class ScheduleItem
@@ -60,4 +60,4 @@ namespace TaskSystem::v1_1
     //
     // };
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

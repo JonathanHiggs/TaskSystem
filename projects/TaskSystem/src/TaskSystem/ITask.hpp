@@ -1,10 +1,10 @@
 #pragma once
 
+#include <TaskSystem/Awaitable.hpp>
 #include <TaskSystem/TaskState.hpp>
-#include <TaskSystem/v1_1/Awaitable.hpp>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
     namespace Detail
     {
@@ -61,4 +61,4 @@ namespace TaskSystem::v1_1
         [[nodiscard]] virtual void ThrowIfFaulted() const = 0;
     };
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

@@ -1,15 +1,15 @@
 #pragma once
 
+#include <TaskSystem/AtomicLockGuard.hpp>
+#include <TaskSystem/Awaitable.hpp>
+#include <TaskSystem/Detail/Continuation.hpp>
+#include <TaskSystem/Detail/Promise.hpp>
+#include <TaskSystem/Detail/TaskStates.hpp>
+#include <TaskSystem/Detail/Utils.hpp>
+#include <TaskSystem/ITask.hpp>
+#include <TaskSystem/ITaskScheduler.hpp>
+#include <TaskSystem/ScheduleItem.hpp>
 #include <TaskSystem/TaskState.hpp>
-#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
-#include <TaskSystem/v1_1/Awaitable.hpp>
-#include <TaskSystem/v1_1/Detail/Continuation.hpp>
-#include <TaskSystem/v1_1/Detail/Promise.hpp>
-#include <TaskSystem/v1_1/Detail/TaskStates.hpp>
-#include <TaskSystem/v1_1/Detail/Utils.hpp>
-#include <TaskSystem/v1_1/ITask.hpp>
-#include <TaskSystem/v1_1/ITaskScheduler.hpp>
-#include <TaskSystem/v1_1/ScheduleItem.hpp>
 
 #include <atomic>
 #include <cassert>
@@ -19,7 +19,7 @@
 #include <variant>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
 
     namespace Detail
@@ -696,4 +696,4 @@ namespace TaskSystem::v1_1
 
     }  // namespace Detail
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

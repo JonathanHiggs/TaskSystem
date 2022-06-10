@@ -28,13 +28,9 @@ namespace TaskSystem
         ValueType value;
 
     public:
-        constexpr TaskState(ValueType value) : value(value)
-        { }
+        constexpr TaskState(ValueType value) : value(value) { }
 
-        [[nodiscard]] constexpr operator ValueType() const noexcept
-        {
-            return value;
-        }
+        [[nodiscard]] constexpr operator ValueType() const noexcept { return value; }
 
         [[nodiscard]] constexpr bool IsCompleted() const noexcept
         {
@@ -66,10 +62,7 @@ namespace TaskSystem
             }
         }
 
-        [[nodiscard]] constexpr std::string ToString() const noexcept
-        {
-            return std::string(ToStringView());
-        }
+        [[nodiscard]] constexpr std::string ToString() const noexcept { return std::string(ToStringView()); }
     };
 
     static constexpr std::array<TaskState, 8u> TaskStates{ TaskState::Created,   TaskState::Scheduled,

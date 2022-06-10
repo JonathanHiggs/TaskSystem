@@ -15,10 +15,7 @@ namespace TaskSystem::Tests
     {
         std::atomic_flag logMutex;
 
-        void Log(std::string_view message)
-        {
-            std::cout << message;
-        }
+        void Log(std::string_view message) { std::cout << message; }
 
     }  // namespace
 

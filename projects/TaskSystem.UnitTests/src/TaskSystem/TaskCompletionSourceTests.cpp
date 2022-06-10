@@ -1,10 +1,10 @@
-#include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
-#include <TaskSystem/v1_1/TaskCompletionSource.hpp>
+#include <TaskSystem/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/TaskCompletionSource.hpp>
 
 #include <gtest/gtest.h>
 
 
-namespace TaskSystem::v1_1::Tests
+namespace TaskSystem::Tests
 {
 
     TEST(TaskCompletionSourceTests, trySetResultCompletesTask)
@@ -159,4 +159,4 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_FALSE(taskCompletionSource.TrySetException(42));
     }
 
-}  // namespace TaskSystem::v1_1::Tests
+}  // namespace TaskSystem::Tests

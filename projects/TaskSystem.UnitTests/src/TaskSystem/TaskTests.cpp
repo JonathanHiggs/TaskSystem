@@ -1,6 +1,6 @@
+#include <TaskSystem/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/Task.hpp>
 #include <TaskSystem/Utils/Tracked.hpp>
-#include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
-#include <TaskSystem/v1_1/Task.hpp>
 
 #include <gtest/gtest.h>
 
@@ -12,10 +12,10 @@ using namespace std::chrono_literals;
 using TaskSystem::Utils::Tracked;
 
 
-namespace TaskSystem::v1_1::Tests
+namespace TaskSystem::Tests
 {
 
-    TEST(TaskTests_v1_1, taskLambda)
+    TEST(TaskTests, taskLambda)
     {
         // Arrange
         auto started = false;
@@ -43,7 +43,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), expected);
     }
 
-    TEST(TaskTests_v1_1, taskReturnsReference)
+    TEST(TaskTests, taskReturnsReference)
     {
         // Arrange
         bool started = false;
@@ -71,7 +71,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(std::addressof(task.Result()), std::addressof(expected));
     }
 
-    TEST(TaskTests_v1_1, taskReturnsPointer)
+    TEST(TaskTests, taskReturnsPointer)
     {
         // Arrange
         bool started = false;
@@ -99,7 +99,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), &expected);
     }
 
-    TEST(TaskTests_v1_1, voidTaskLambda)
+    TEST(TaskTests, voidTaskLambda)
     {
         // Arrange
         auto started = false;
@@ -125,7 +125,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.State(), TaskState::Completed);
     }
 
-    TEST(TaskTests_v1_1, taskLambdaThatThrows)
+    TEST(TaskTests, taskLambdaThatThrows)
     {
         // Arrange
         auto started = false;
@@ -158,7 +158,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_THROW(task.Result(), std::exception);
     }
 
-    TEST(TaskTests_v1_1, voidTaskLambdaThatThrows)
+    TEST(TaskTests, voidTaskLambdaThatThrows)
     {
         // Arrange
         auto started = false;
@@ -190,7 +190,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_THROW(task.ThrowIfFaulted(), std::exception);
     }
 
-    TEST(TaskTests_v1_1, taskFrom)
+    TEST(TaskTests, taskFrom)
     {
         // Arrange
         auto started = false;
@@ -218,7 +218,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), expected);
     }
 
-    TEST(TaskTests_v1_1, voidTaskFrom)
+    TEST(TaskTests, voidTaskFrom)
     {
         // Arrange
         auto started = false;
@@ -241,7 +241,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.State(), TaskState::Completed);
     }
 
-    TEST(TaskTests_v1_1, taskFromThatThrows)
+    TEST(TaskTests, taskFromThatThrows)
     {
         // Arrange
         auto started = false;
@@ -269,7 +269,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_THROW(task.Result(), std::exception);
     }
 
-    TEST(TaskTests_v1_1, awaitedTaskInTask)
+    TEST(TaskTests, awaitedTaskInTask)
     {
         // Arrange
         auto started = false;
@@ -308,7 +308,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(innerTask.Result(), expected);
     }
 
-    TEST(TaskTests_v1_1, awaitedTaskCreatedInTask)
+    TEST(TaskTests, awaitedTaskCreatedInTask)
     {
         // Arrange
         auto started = false;
@@ -341,7 +341,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), expected);
     }
 
-    TEST(TaskTests_v1_1, taskWithAwaitedTaskThatThrowsPropogatesError)
+    TEST(TaskTests, taskWithAwaitedTaskThatThrowsPropogatesError)
     {
         // Arrange
         auto started = false;
@@ -378,7 +378,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_THROW(innerTask.Result(), std::exception);
     }
 
-    TEST(TaskTests_v1_1, scheduleTaskTwiceThrows)
+    TEST(TaskTests, scheduleTaskTwiceThrows)
     {
         // Arrange
         auto task = Task<int>::From([]() { return 42; });
@@ -392,7 +392,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_THROW(scheduler.Schedule(task), std::exception);
     }
 
-    TEST(TaskTests_v1_1, taskScheduledOnDifferentSchedulerSwitchesExecution)
+    TEST(TaskTests, taskScheduledOnDifferentSchedulerSwitchesExecution)
     {
         // Arrange
         auto scheduler1 = SynchronousTaskScheduler();
@@ -454,7 +454,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(taskCompleted);
     }
 
-    TEST(TaskTests_v1_1, awaitCompletedTask)
+    TEST(TaskTests, awaitCompletedTask)
     {
         // Arrange
         auto expected = 42;
@@ -482,7 +482,7 @@ namespace TaskSystem::v1_1::Tests
 
     // await a completed task
 
-    TEST(TaskTests_v1_1, waitContinuesOnTaskResult)
+    TEST(TaskTests, waitContinuesOnTaskResult)
     {
         // Arrange
         auto expected = 42;
@@ -514,20 +514,22 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(completed);
     }
 
-    TEST(TaskTests_v1_1, awaitTaskOnThread)
+    TEST(TaskTests, awaitTaskOnThread)
     {
         // Arrange
         auto expected = 42;
         auto result = 0;
         auto scheduler = SynchronousTaskScheduler();
 
-        auto task = [&]() -> Task<int> { co_return expected; }();
-        auto workerTask = [&]() -> Task<int> { co_return co_await task; }();
+        auto task = [&]() -> Task<int> {
+            co_return expected;
+        }();
+        auto workerTask = [&]() -> Task<int> {
+            co_return co_await task;
+        }();
 
         // Act
-        std::thread worker([&]() {
-            result = workerTask.Result();
-        });
+        std::thread worker([&]() { result = workerTask.Result(); });
 
         scheduler.Schedule(task);
         scheduler.Schedule(workerTask);
@@ -538,7 +540,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(result, expected);
     }
 
-    TEST(TaskTests_v1_1, waitContinuesOnTaskException)
+    TEST(TaskTests, waitContinuesOnTaskException)
     {
         // Arrange
         auto expected = 42;
@@ -571,10 +573,12 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(completed);
     }
 
-    TEST(TaskTests_v1_1, LValueTestReturnByValueNeverCopied)
+    TEST(TaskTests, LValueTestReturnByValueNeverCopied)
     {
         // Arrange
-        auto task = []() -> Task<Tracked> { co_return Tracked(); }();
+        auto task = []() -> Task<Tracked> {
+            co_return Tracked();
+        }();
 
         auto scheduler = SynchronousTaskScheduler();
         scheduler.Schedule(task);
@@ -588,11 +592,13 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_GT(result.Moves(), 1u);
     }
 
-    TEST(TaskTests_v1_1, LValueReturnByRefNeverCopiedOrMoved)
+    TEST(TaskTests, LValueReturnByRefNeverCopiedOrMoved)
     {
         // Arrange
         auto tracked = Tracked();
-        auto task = [&]() -> Task<Tracked &> { co_return tracked; }();
+        auto task = [&]() -> Task<Tracked &> {
+            co_return tracked;
+        }();
 
         auto scheduler = SynchronousTaskScheduler();
         scheduler.Schedule(task);
@@ -606,10 +612,12 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(result.Moves(), 0u);
     }
 
-    TEST(TaskTests_v1_1, RValueTestReturnByValueNeverCopied)
+    TEST(TaskTests, RValueTestReturnByValueNeverCopied)
     {
         // Arrange
-        auto task = []() -> Task<Tracked> { co_return Tracked(); }();
+        auto task = []() -> Task<Tracked> {
+            co_return Tracked();
+        }();
 
         auto scheduler = SynchronousTaskScheduler();
         scheduler.Schedule(task);
@@ -623,13 +631,15 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_GT(result.Moves(), 1u);
     }
 
-    TEST(TaskTests_v1_1, RValueTestReturnByRefNeverCopiedOrMoved)
+    TEST(TaskTests, RValueTestReturnByRefNeverCopiedOrMoved)
     {
         // Arrange
         auto tracked = Tracked();
         auto scheduler = SynchronousTaskScheduler();
 
-        auto task = [&]() -> Task<Tracked &> { co_return tracked; }();
+        auto task = [&]() -> Task<Tracked &> {
+            co_return tracked;
+        }();
         scheduler.Schedule(task);
 
         // Act
@@ -640,4 +650,4 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(tracked.Moves(), 0u);
     }
 
-}  // namespace TaskSystem::v1_1::Tests
+}  // namespace TaskSystem::Tests

@@ -3,7 +3,7 @@
 #include <atomic>
 
 
-namespace TaskSystem::v1_1::Detail
+namespace TaskSystem::Detail
 {
 
     inline constexpr size_t CacheLineSize = std::hardware_destructive_interference_size;
@@ -32,4 +32,4 @@ namespace TaskSystem::v1_1::Detail
         return value3;
     }
 
-}  // namespace TaskSystem::v1_1::Detail
+}  // namespace TaskSystem::Detail

@@ -1,17 +1,14 @@
-#include <TaskSystem/v1_1/ScheduleItem.hpp>
+#include <TaskSystem/ScheduleItem.hpp>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
 
-    ScheduleItem::ScheduleItem(handle_type handle) noexcept : item(handle)
-    { }
+    ScheduleItem::ScheduleItem(handle_type handle) noexcept : item(handle) { }
 
-    ScheduleItem::ScheduleItem(lambda_type lambda) noexcept : item(lambda)
-    { }
+    ScheduleItem::ScheduleItem(lambda_type lambda) noexcept : item(lambda) { }
 
-    ScheduleItem::ScheduleItem(function_type function) noexcept : item(function)
-    { }
+    ScheduleItem::ScheduleItem(function_type function) noexcept : item(function) { }
 
     std::exception_ptr ScheduleItem::Run() noexcept
     {
@@ -50,4 +47,4 @@ namespace TaskSystem::v1_1
         return nullptr;
     }
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

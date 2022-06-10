@@ -1,13 +1,13 @@
-#include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
-#include <TaskSystem/v1_1/Task.hpp>
+#include <TaskSystem/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/Task.hpp>
 
 #include <gtest/gtest.h>
 
 
-namespace TaskSystem::v1_1::Tests
+namespace TaskSystem::Tests
 {
 
-    TEST(SynchronousTaskSchedulerTests_v1_1, runWithLambdas)
+    TEST(SynchronousTaskSchedulerTests, runWithLambdas)
     {
         // Arrange
         auto completed1 = false;
@@ -35,12 +35,9 @@ namespace TaskSystem::v1_1::Tests
 
     static bool completed = false;
 
-    void SetCompleted()
-    {
-        completed = true;
-    }
+    void SetCompleted() { completed = true; }
 
-    TEST(SynchronousTaskSchedulerTests_v1_1, runWithFunctionPointer)
+    TEST(SynchronousTaskSchedulerTests, runWithFunctionPointer)
     {
         // Arrange
         auto scheduler = SynchronousTaskScheduler();
@@ -54,7 +51,7 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(completed);
     }
 
-    TEST(SynchronousTaskSchedulerTests_v1_1, isWorkingThread)
+    TEST(SynchronousTaskSchedulerTests, isWorkingThread)
     {
         // Arrange
         auto isWorkerThread = false;
@@ -73,4 +70,4 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_TRUE(isWorkerThread);
     }
 
-}  // namespace TaskSystem::v1_1::Tests
+}  // namespace TaskSystem::Tests

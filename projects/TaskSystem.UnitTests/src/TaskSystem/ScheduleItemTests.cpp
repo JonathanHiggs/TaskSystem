@@ -1,19 +1,15 @@
-#include <TaskSystem/v1_1/ScheduleItem.hpp>
+#include <TaskSystem/ScheduleItem.hpp>
 
 #include <gtest/gtest.h>
 
 
-namespace TaskSystem::v1_1::Tests
+namespace TaskSystem::Tests
 {
     namespace
     {
-        void EmptyFunction()
-        { }
+        void EmptyFunction() { }
 
-        void ThrowFunction()
-        {
-            throw std::exception();
-        }
+        void ThrowFunction() { throw std::exception(); }
 
     }  // namespace
 
@@ -69,4 +65,4 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_NE(result, nullptr);
     }
 
-}  // namespace TaskSystem::v1_1::Tests
+}  // namespace TaskSystem::Tests

@@ -1,9 +1,9 @@
-#include <TaskSystem/v1_1/Detail/Promise.hpp>
+#include <TaskSystem/Detail/Promise.hpp>
 
 #include <gtest/gtest.h>
 
 
-namespace TaskSystem::v1_1::Detail::Tests
+namespace TaskSystem::Detail::Tests
 {
 
     struct RunnablePromisePolicy
@@ -277,4 +277,4 @@ namespace TaskSystem::v1_1::Detail::Tests
         EXPECT_EQ(promise.Result(), expected);
     }
 
-}  // namespace TaskSystem::v1_1::Detail::Tests
+}  // namespace TaskSystem::Detail::Tests

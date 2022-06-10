@@ -1,23 +1,16 @@
-#include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/SynchronousTaskScheduler.hpp>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
 
     void SetCurrentScheduler(ITaskScheduler * scheduler);
 
-    SynchronousTaskScheduler::SynchronousTaskScheduler() noexcept : id(std::nullopt)
-    { }
+    SynchronousTaskScheduler::SynchronousTaskScheduler() noexcept : id(std::nullopt) { }
 
-    bool SynchronousTaskScheduler::IsWorkerThread() const noexcept
-    {
-        return id && *id == std::this_thread::get_id();
-    }
+    bool SynchronousTaskScheduler::IsWorkerThread() const noexcept { return id && *id == std::this_thread::get_id(); }
 
-    void SynchronousTaskScheduler::Schedule(ScheduleItem && item)
-    {
-        queue.push(std::move(item));
-    }
+    void SynchronousTaskScheduler::Schedule(ScheduleItem && item) { queue.push(std::move(item)); }
 
     void SynchronousTaskScheduler::Run()
     {
@@ -41,4 +34,4 @@ namespace TaskSystem::v1_1
         SetCurrentScheduler(nullptr);
     }
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
-#include <TaskSystem/v1_1/Awaitable.hpp>
-#include <TaskSystem/v1_1/Detail/Continuation.hpp>
-#include <TaskSystem/v1_1/Detail/Promise.hpp>
-#include <TaskSystem/v1_1/Detail/TaskStates.hpp>
-#include <TaskSystem/v1_1/Detail/Utils.hpp>
-#include <TaskSystem/v1_1/ITask.hpp>
-#include <TaskSystem/v1_1/Task.hpp>
+#include <TaskSystem/AtomicLockGuard.hpp>
+#include <TaskSystem/Awaitable.hpp>
+#include <TaskSystem/Detail/Continuation.hpp>
+#include <TaskSystem/Detail/Promise.hpp>
+#include <TaskSystem/Detail/TaskStates.hpp>
+#include <TaskSystem/Detail/Utils.hpp>
+#include <TaskSystem/ITask.hpp>
+#include <TaskSystem/Task.hpp>
 
 #include <coroutine>
 #include <exception>
@@ -16,7 +16,7 @@
 #include <variant>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
     namespace Detail
     {
@@ -172,9 +172,9 @@ namespace TaskSystem::v1_1
         TaskCompletionSource(TaskCompletionSource &&) = delete;
         TaskCompletionSource & operator=(TaskCompletionSource &&) = delete;
 
-        [[nodiscard]] ::TaskSystem::v1_1::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> Task()
+        [[nodiscard]] ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>> Task()
         {
-            return ::TaskSystem::v1_1::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>>(promise);
+            return ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>>(promise);
         }
 
         template <typename TValue, std::enable_if_t<std::is_convertible_v<TValue &&, TResult>> * = nullptr>
@@ -217,4 +217,4 @@ namespace TaskSystem::v1_1
         }
     };
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

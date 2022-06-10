@@ -1,12 +1,12 @@
-#include <TaskSystem/v1_1/ITask.hpp>
-#include <TaskSystem/v1_1/SynchronousTaskScheduler.hpp>
-#include <TaskSystem/v1_1/Task.hpp>
-#include <TaskSystem/v1_1/TaskCompletionSource.hpp>
+#include <TaskSystem/ITask.hpp>
+#include <TaskSystem/SynchronousTaskScheduler.hpp>
+#include <TaskSystem/Task.hpp>
+#include <TaskSystem/TaskCompletionSource.hpp>
 
 #include <gtest/gtest.h>
 
 
-namespace TaskSystem::v1_1::Tests
+namespace TaskSystem::Tests
 {
 
     TEST(ITaskTests, taskAsITask)
@@ -32,11 +32,15 @@ namespace TaskSystem::v1_1::Tests
     {
         // Arrange
         auto expected = 42;
-        auto task = [&]() -> Task<int> { co_return expected; }();
+        auto task = [&]() -> Task<int> {
+            co_return expected;
+        }();
 
         ITask<int> & iTask = task;
 
-        auto outerTask = [&]() -> Task<int> { co_return co_await iTask; }();
+        auto outerTask = [&]() -> Task<int> {
+            co_return co_await iTask;
+        }();
         auto scheduler = SynchronousTaskScheduler();
         scheduler.Schedule(outerTask);
 
@@ -70,9 +74,11 @@ namespace TaskSystem::v1_1::Tests
         auto taskCompletionSource = TaskCompletionSource<int>();
         auto task = taskCompletionSource.Task();
 
-        ITask<int>& iTask = task;
+        ITask<int> & iTask = task;
 
-        auto outerTask = [&]() -> Task<int> { co_return co_await iTask; }();
+        auto outerTask = [&]() -> Task<int> {
+            co_return co_await iTask;
+        }();
         auto scheduler = SynchronousTaskScheduler();
         scheduler.Schedule(outerTask);
 
@@ -84,4 +90,4 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(outerTask.Result(), expected);
     }
 
-}  // namespace TaskSystem::v1_1::Tests
+}  // namespace TaskSystem::Tests

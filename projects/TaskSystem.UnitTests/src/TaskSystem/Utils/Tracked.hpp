@@ -18,8 +18,7 @@ namespace TaskSystem::Utils
     public:
         Tracked() = default;
 
-        Tracked(Tracked const & other) noexcept : copies(other.copies + 1), moves(other.moves)
-        { }
+        Tracked(Tracked const & other) noexcept : copies(other.copies + 1), moves(other.moves) { }
 
         Tracked & operator=(Tracked const & other) noexcept
         {
@@ -41,15 +40,9 @@ namespace TaskSystem::Utils
             return *this;
         }
 
-        size_t Copies() const
-        {
-            return copies;
-        }
+        size_t Copies() const { return copies; }
 
-        size_t Moves() const
-        {
-            return moves;
-        }
+        size_t Moves() const { return moves; }
     };
 
 }  // namespace TaskSystem::Utils

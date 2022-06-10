@@ -1,9 +1,9 @@
 #pragma once
 
-#include <TaskSystem/v1_1/ScheduleItem.hpp>
+#include <TaskSystem/ScheduleItem.hpp>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
 
     class ITaskScheduler
@@ -23,4 +23,4 @@ namespace TaskSystem::v1_1
 
     bool IsCurrentScheduler(ITaskScheduler * scheduler);
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem

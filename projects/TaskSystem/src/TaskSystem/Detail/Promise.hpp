@@ -1,12 +1,12 @@
 #pragma once
 
+#include <TaskSystem/AtomicLockGuard.hpp>
+#include <TaskSystem/Detail/Continuation.hpp>
+#include <TaskSystem/Detail/IPromise.hpp>
+#include <TaskSystem/Detail/TaskStates.hpp>
+#include <TaskSystem/Detail/Utils.hpp>
+#include <TaskSystem/ITaskScheduler.hpp>
 #include <TaskSystem/TaskState.hpp>
-#include <TaskSystem/v1_1/AtomicLockGuard.hpp>
-#include <TaskSystem/v1_1/Detail/Continuation.hpp>
-#include <TaskSystem/v1_1/Detail/IPromise.hpp>
-#include <TaskSystem/v1_1/Detail/TaskStates.hpp>
-#include <TaskSystem/v1_1/Detail/Utils.hpp>
-#include <TaskSystem/v1_1/ITaskScheduler.hpp>
 
 #include <atomic>
 #include <concepts>
@@ -16,7 +16,7 @@
 #include <variant>
 
 
-namespace TaskSystem::v1_1::Detail
+namespace TaskSystem::Detail
 {
 
     template <typename T>
@@ -416,4 +416,4 @@ namespace TaskSystem::v1_1::Detail
         }
     };
 
-}  // namespace TaskSystem::v1_1::Detail
+}  // namespace TaskSystem::Detail

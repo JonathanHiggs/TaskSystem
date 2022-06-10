@@ -1,11 +1,11 @@
 #pragma once
 
-#include <TaskSystem/v1_1/Detail/IPromise.hpp>
+#include <TaskSystem/Detail/IPromise.hpp>
 
 #include <coroutine>
 
 
-namespace TaskSystem::v1_1
+namespace TaskSystem
 {
     namespace Detail
     {
@@ -75,4 +75,4 @@ namespace TaskSystem::v1_1
         TResult await_resume() { return vtable->await_resume(value); }
     };
 
-}  // namespace TaskSystem::v1_1
+}  // namespace TaskSystem
