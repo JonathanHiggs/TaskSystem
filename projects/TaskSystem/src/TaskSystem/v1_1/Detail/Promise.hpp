@@ -202,7 +202,7 @@ namespace TaskSystem::v1_1::Detail
 
         void Wait() const noexcept override final
         {
-            // Waits for TrySetResult or TrySetException to set completeFlag to true
+            // Waits for TrySetResult, TrySetCompleted or TrySetException to set completeFlag to true
             completeFlag.wait(false, std::memory_order_acquire);
         }
     };
@@ -319,6 +319,64 @@ namespace TaskSystem::v1_1::Detail
             }
 
             return std::get<Completed<TResult>>(std::move(this->state)).Value;
+        }
+    };
+
+    template <typename TResult, PromisePolicy TPolicy>
+    class Promise<TResult &, TPolicy> : public PromiseBase<TResult *, TPolicy>
+    {
+    public:
+        ~Promise() noexcept override = default;
+
+        [[nodiscard]] bool TrySetResult(TResult & value) noexcept
+        {
+            {
+                std::lock_guard lock(this->stateFlag);
+
+                if (!this->StateIsOneOf<Created, Running, Suspended>())
+                {
+                    return false;
+                }
+
+                this->state = Completed<TResult *>{ std::addressof(value) };
+            }
+
+            this->completeFlag.test_and_set(std::memory_order_acquire);
+            this->completeFlag.notify_all();
+
+            return true;
+        }
+
+        [[nodiscard]] TResult & Result()
+        {
+            std::lock_guard lock(this->stateFlag);
+
+            if (this->StateIsOneOf<Created, Scheduled, Running, Suspended>())
+            {
+                throw std::exception("Task is not complete");
+            }
+            else if (auto * fault = std::get_if<Faulted>(&this->state))
+            {
+                std::rethrow_exception(fault->Exception);
+            }
+
+            return *std::get<Completed<TResult *>>(this->state).Value;
+        }
+
+        [[nodiscard]] TResult const & Result() const
+        {
+            std::lock_guard lock(this->stateFlag);
+
+            if (this->StateIsOneOf<Created, Scheduled, Running, Suspended>())
+            {
+                throw std::exception("Task is not complete");
+            }
+            else if (auto * fault = std::get_if<Faulted>(&this->state))
+            {
+                std::rethrow_exception(fault->Exception);
+            }
+
+            return *std::get<Completed<TResult *>>(this->state).Value;
         }
     };
 

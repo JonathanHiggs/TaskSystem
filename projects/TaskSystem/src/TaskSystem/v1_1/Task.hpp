@@ -227,7 +227,6 @@ namespace TaskSystem::v1_1
             static inline constexpr bool CanSuspend = true;
         };
 
-        // Maybe: template on the exception type rather than assuming exception_ptr?
         template <typename TResult, typename TImpl>
         class TaskPromiseBase : public Promise<TResult, TaskPromisePolicy>
         {
@@ -262,16 +261,27 @@ namespace TaskSystem::v1_1
         public:
             using promise_type = TaskPromise<TResult>;
             using handle_type = std::coroutine_handle<promise_type>;
+            using task_type = Task<TResult, promise_type>;
 
-            Task<TResult, TaskPromise<TResult>> get_return_object() noexcept
-            {
-                return Task<TResult, TaskPromise<TResult>>(handle_type::from_promise(*this));
-            }
+            task_type get_return_object() noexcept { return task_type(handle_type::from_promise(*this)); }
 
             void return_value(std::convertible_to<TResult> auto && value) noexcept
             {
                 this->TrySetResult(std::forward<decltype(value)>(value));
             }
+        };
+
+        template <typename TResult>
+        class TaskPromise<TResult &> : public TaskPromiseBase<TResult &, TaskPromise<TResult &>>
+        {
+        public:
+            using promise_type = TaskPromise<TResult &>;
+            using handle_type = std::coroutine_handle<promise_type>;
+            using task_type = Task<TResult &, TaskPromise<TResult &>>;
+
+            task_type get_return_object() noexcept { return task_type(handle_type::from_promise(*this)); }
+
+            void return_value(TResult & value) noexcept { this->TrySetResult(value); }
         };
 
         template <>
@@ -295,7 +305,7 @@ namespace TaskSystem::v1_1
 
 #pragma region Task
 
-        template <typename TResult, typename TImpl>
+        template <typename TResult>
         class TaskBase : public ITask<TResult>
         {
         public:
@@ -326,7 +336,8 @@ namespace TaskSystem::v1_1
                     if (handle.promise().State() == TaskState::Running)
                     {
                         // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
-                        //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
+                        //       maybe add orphaned flag to promise so it can clean up when transferring to
+                        //       continuation?
                     }
 
                     handle.destroy();
@@ -344,7 +355,8 @@ namespace TaskSystem::v1_1
                     if (handle.promise().State() == TaskState::Running)
                     {
                         // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
-                        //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
+                        //       maybe add orphaned flag to promise so it can clean up when transferring to
+                        //       continuation?
                     }
 
                     handle.destroy();
@@ -390,28 +402,16 @@ namespace TaskSystem::v1_1
                 handle.promise().Wait();
             }
 
-            TImpl & ScheduleOn(ITaskScheduler & taskScheduler) &
+            void ScheduleOn(ITaskScheduler & taskScheduler) &
             {
                 handle.promise().TaskScheduler(&taskScheduler);
-                return *static_cast<TImpl *>(this);
+                return *this;
             }
 
-            [[nodiscard]] TImpl && ScheduleOn(ITaskScheduler & taskScheduler) &&
-            {
-                handle.promise().TaskScheduler(&taskScheduler);
-                return std::move(*static_cast<TImpl *>(this));
-            }
-
-            TImpl & ContinueOn(ITaskScheduler & taskScheduler) &
+            void ContinueOn(ITaskScheduler & taskScheduler) &
             {
                 handle.promise().ContinuationScheduler(&taskScheduler);
-                return *static_cast<TImpl *>(this);
-            }
-
-            [[nodiscard]] TImpl && ContinueOn(ITaskScheduler & taskScheduler) &&
-            {
-                handle.promise().ContinuationScheduler(&taskScheduler);
-                return std::move(*static_cast<TImpl *>(this));
+                return *this;
             }
 
         protected:
@@ -428,26 +428,23 @@ namespace TaskSystem::v1_1
 
     }  // namespace Detail
 
-    // clang-format off
     template <typename TResult>
-    class [[nodiscard]] Task<TResult, Detail::TaskPromise<TResult>> final
-        : public Detail::TaskBase<TResult, Task<TResult, Detail::TaskPromise<TResult>>>
-    // clang-format on
+    class [[nodiscard]] Task<TResult, Detail::TaskPromise<TResult>> final : public Detail::TaskBase<TResult>
     {
     public:
-        using base_type = Detail::TaskBase<TResult, Task<TResult, Detail::TaskPromise<TResult>>>;
+        using base_type = Detail::TaskBase<TResult>;
 
         using value_type = TResult;
         using promise_type = Detail::TaskPromise<TResult>;
         using handle_type = std::coroutine_handle<promise_type>;
 
     public:
-        explicit Task(handle_type handle) noexcept : base_type(handle) {}
+        explicit Task(handle_type handle) noexcept : base_type(handle) { }
 
         Task(Task const &) = delete;
         Task & operator=(Task const &) = delete;
 
-        Task(Task&& other) noexcept : base_type(std::move(other)) {}
+        Task(Task && other) noexcept : base_type(std::move(other)) { }
 
         Task & operator=(Task && other) noexcept
         {
@@ -519,16 +516,105 @@ namespace TaskSystem::v1_1
             this->Wait();
             return std::move(this->handle.promise().Result());
         }
+
+        [[nodiscard]] Task && ScheduleOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->handle.promise().TaskScheduler(&taskScheduler);
+            return std::move(*this);
+        }
+
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->handle.promise().ContinuationScheduler(&taskScheduler);
+            return std::move(*this);
+        }
     };
 
-    // clang-format off
-    template <>
-    class [[nodiscard]] Task<void, Detail::TaskPromise<void>> final
-        : public Detail::TaskBase<void, Task<void, Detail::TaskPromise<void>>>
-    // clang-format on
+    template <typename TResult>
+    class [[nodiscard]] Task<TResult &, Detail::TaskPromise<TResult &>> final : public Detail::TaskBase<TResult &>
     {
     public:
-        using base_type = Detail::TaskBase<void, Task<void, Detail::TaskPromise<void>>>;
+        using base_type = Detail::TaskBase<TResult &>;
+
+        using value_type = TResult &;
+        using promise_type = Detail::TaskPromise<TResult &>;
+        using handle_type = std::coroutine_handle<promise_type>;
+
+    public:
+        explicit Task(handle_type handle) noexcept : base_type(handle) { }
+
+        Task(Task const &) = delete;
+        Task & operator=(Task const &) = delete;
+
+        Task(Task && other) noexcept : base_type(std::move(other)) { }
+
+        Task & operator=(Task && other) noexcept
+        {
+            base_type::operator=(std::move(other));
+            return *this;
+        }
+
+        // ToDo: use concept
+        template <typename TFunc, std::enable_if_t<std::is_same_v<TResult &, std::invoke_result_t<TFunc>>> * = nullptr>
+        [[nodiscard]] static Task<TResult &, Detail::TaskPromise<TResult &>> From(TFunc && func)
+        {
+            co_return std::forward<TFunc>(func)();
+        }
+
+        // ToDo: use concept
+        template <typename TFunc, std::enable_if_t<std::is_same_v<TResult, std::invoke_result_t<TFunc>>> * = nullptr>
+        static void Run(TFunc && func)
+        {
+            Run(std::forward<TFunc>(func), DefaultScheduler());
+        }
+
+        // ToDo: use concept
+        template <typename TFunc, std::enable_if_t<std::is_same_v<TResult, std::invoke_result_t<TFunc>>> * = nullptr>
+        static void Run(TFunc && func, ITaskScheduler * scheduler)
+        {
+            scheduler->Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
+        }
+
+        [[nodiscard]] TResult & Result() override
+        {
+            if (!this->handle)
+            {
+                throw std::exception("Invalid handle");
+            }
+
+            this->Wait();
+            return this->handle.promise().Result();
+        }
+
+        [[nodiscard]] TResult const & Result() const override
+        {
+            if (!this->handle)
+            {
+                throw std::exception("Invalid handle");
+            }
+
+            this->Wait();
+            return this->handle.promise().Result();
+        }
+
+        [[nodiscard]] Task && ScheduleOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->handle.promise().TaskScheduler(&taskScheduler);
+            return std::move(*this);
+        }
+
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->handle.promise().ContinuationScheduler(&taskScheduler);
+            return std::move(*this);
+        }
+    };
+
+    template <>
+    class [[nodiscard]] Task<void, Detail::TaskPromise<void>> final : public Detail::TaskBase<void>
+    {
+    public:
+        using base_type = Detail::TaskBase<void>;
 
         using value_type = void;
         using promise_type = Detail::TaskPromise<void>;
@@ -580,11 +666,19 @@ namespace TaskSystem::v1_1
             this->Wait();
             this->handle.promise().ThrowIfFaulted();
         }
+
+        [[nodiscard]] Task && ScheduleOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->handle.promise().TaskScheduler(&taskScheduler);
+            return std::move(*this);
+        }
+
+        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
+        {
+            this->handle.promise().ContinuationScheduler(&taskScheduler);
+            return std::move(*this);
+        }
     };
-
-    // ToDo: Task<void> specialization
-
-    // ToDo: Task<TResult &> specialization
 
     // Maybe: Task::FromResult() task with no coroutine/promise
     // template <typename TResult>

@@ -41,6 +41,34 @@ namespace TaskSystem::v1_1::Tests
         EXPECT_EQ(task.Result(), expected);
     }
 
+    TEST(TaskTests_v1_1, taskReturnReference)
+    {
+        // Arrange
+        bool started = false;
+        auto expected = 42;
+
+        auto task = [&]() -> Task<int &> {
+            started = true;
+            co_return std::ref(expected);
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act & Assert
+        EXPECT_EQ(task.State(), TaskState::Created);
+
+        scheduler.Schedule(task);
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
+
+        EXPECT_FALSE(started);
+
+        scheduler.Run();
+
+        EXPECT_TRUE(started);
+        EXPECT_EQ(task.State(), TaskState::Completed);
+        EXPECT_EQ(std::addressof(task.Result()), std::addressof(expected));
+    }
+
     TEST(TaskTests_v1_1, voidTaskLambda)
     {
         // Arrange
