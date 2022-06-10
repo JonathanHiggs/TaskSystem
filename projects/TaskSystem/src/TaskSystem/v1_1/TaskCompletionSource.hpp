@@ -50,7 +50,7 @@ namespace TaskSystem::v1_1
             template <PromiseType TPromise>
             std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> callerHandle)
             {
-                IPromise& callerPromise = callerHandle.promise();
+                IPromise & callerPromise = callerHandle.promise();
                 return await_suspend(callerHandle, callerPromise);
             }
 

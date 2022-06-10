@@ -10,30 +10,42 @@ namespace TaskSystem::v1_1
     namespace Detail
     {
 
-        // clang-format off
         template <typename TResult>
         struct AwaitableVTable
         {
-            void                    (* destroy)      (void * ptr);
-            bool                    (* await_ready)  (void * ptr);
-            std::coroutine_handle<> (* await_suspend)(void * ptr, std::coroutine_handle<>, Detail::IPromise & promise);
-            TResult                 (* await_resume) (void * ptr);
+            using destructor_m = void (*)(void *);
+            using await_ready_m = bool (*)(void *);
+            using await_suspend_m = std::coroutine_handle<> (*)(void *, std::coroutine_handle<>, IPromise &);
+            using await_resume_m = TResult (*)(void *);
+
+            destructor_m destructor;
+            await_ready_m await_ready;
+            await_suspend_m await_suspend;
+            await_resume_m await_resume;
         };
 
         template <typename TImpl, typename TResult>
-        constexpr AwaitableVTable<TResult> AwaitableFor
-        {
-            [](void * ptr)                                { delete static_cast<TImpl *>(ptr); },
-            [](void * ptr) -> bool                        { return static_cast<TImpl *>(ptr)->await_ready(); },
-            [](void * ptr, std::coroutine_handle<> handle, Detail::IPromise & promise)
-                                                          { return static_cast<TImpl*>(ptr)->await_suspend(handle, promise); },
-            [](void * ptr) -> TResult                     { return static_cast<TImpl *>(ptr)->await_resume(); }
+        constexpr AwaitableVTable<TResult> AwaitableFor{
+            [](void * ptr) { delete static_cast<TImpl *>(ptr); },
+            [](void * ptr) -> bool { return static_cast<TImpl *>(ptr)->await_ready(); },
+            [](void * ptr, std::coroutine_handle<> handle, Detail::IPromise & promise) {
+                return static_cast<TImpl *>(ptr)->await_suspend(handle, promise);
+            },
+            [](void * ptr) -> TResult {
+                return static_cast<TImpl *>(ptr)->await_resume();
+            }
         };
-        // clang-format on
 
     }  // namespace Detail
 
-    // Type-erased awaitable
+    /// <summary>
+    /// Type-erased awaitable
+    /// </summary>
+    /// <remarks>
+    /// Allows ITask implementations to be awaitable when cast to ITask using a virtual call to get the
+    /// implementation's awaitable type
+    /// </remarks>
+    /// <typeparam name="TResult">Type returned from the awaitable</typeparam>
     template <typename TResult>
     class Awaitable
     {
@@ -49,7 +61,7 @@ namespace TaskSystem::v1_1
             vtable = &Detail::AwaitableFor<TImpl, TResult>;
         }
 
-        ~Awaitable() { vtable->destroy(value); }
+        ~Awaitable() { vtable->destructor(value); }
 
         bool await_ready() { return vtable->await_ready(value); }
 
