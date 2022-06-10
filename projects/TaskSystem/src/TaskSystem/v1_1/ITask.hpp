@@ -29,6 +29,8 @@ namespace TaskSystem::v1_1
 
         [[nodiscard]] virtual TResult const && Result() const && = 0;
 
+        // Maybe: ScheduleOn & ContinueOn?
+
     protected:
         [[nodiscard]] virtual Awaitable<TResult> GetAwaitable() const & noexcept = 0;
         [[nodiscard]] virtual Awaitable<TResult> GetAwaitable() const && noexcept = 0;
@@ -49,6 +51,8 @@ namespace TaskSystem::v1_1
         virtual void Wait() const noexcept = 0;
 
         [[nodiscard]] virtual void ThrowIfFaulted() const = 0;
+
+        // Maybe: ScheduleOn & ContinueOn?
 
     protected:
         [[nodiscard]] virtual Awaitable<void> GetAwaitable() const & noexcept = 0;

@@ -295,78 +295,164 @@ namespace TaskSystem::v1_1
 
 #pragma region Task
 
+        template <typename TResult, typename TImpl>
+        class TaskBase : public ITask<TResult>
+        {
+        public:
+            using value_type = TResult;
+            using promise_type = TaskPromise<TResult>;
+            using handle_type = std::coroutine_handle<promise_type>;
+
+        protected:
+            handle_type handle;
+
+        public:
+            explicit TaskBase(handle_type handle) noexcept : handle(handle) { }
+
+            TaskBase(TaskBase const &) = delete;
+            TaskBase & operator=(TaskBase const &) = delete;
+
+            TaskBase(TaskBase && other) noexcept : handle(std::exchange(other.handle, nullptr)) { }
+
+            TaskBase & operator=(TaskBase && other) noexcept
+            {
+                if (std::addressof(other) == this)
+                {
+                    return *this;
+                }
+
+                if (handle)
+                {
+                    if (handle.promise().State() == TaskState::Running)
+                    {
+                        // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
+                        //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
+                    }
+
+                    handle.destroy();
+                }
+
+                handle = std::exchange(other.handle, nullptr);
+
+                return *this;
+            }
+
+            ~TaskBase() noexcept override
+            {
+                if (handle)
+                {
+                    if (handle.promise().State() == TaskState::Running)
+                    {
+                        // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
+                        //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
+                    }
+
+                    handle.destroy();
+                }
+            }
+
+            [[nodiscard]] operator ScheduleItem() const
+            {
+                if (!handle)
+                {
+                    throw std::exception("Invalid handle");
+                }
+
+                // ToDo: maybe add promise to ScheduleItem and call TrySetScheduled elsewhere
+                if (!handle.promise().TrySetScheduled())
+                {
+                    throw std::exception("Unable to schedule task");
+                }
+
+                return ScheduleItem(std::coroutine_handle<>(handle));
+            }
+
+            auto operator co_await() const & noexcept { return TaskAwaitable<TResult, false>(handle); }
+            auto operator co_await() const && noexcept { return TaskAwaitable<TResult, true>(handle); }
+
+            [[nodiscard]] TaskState State() const noexcept override final
+            {
+                if (!handle)
+                {
+                    return TaskState::Unknown;
+                }
+
+                return handle.promise().State();
+            }
+
+            void Wait() const noexcept override final
+            {
+                if (!handle)
+                {
+                    return;
+                }
+
+                handle.promise().Wait();
+            }
+
+            TImpl & ScheduleOn(ITaskScheduler & taskScheduler) &
+            {
+                handle.promise().TaskScheduler(&taskScheduler);
+                return *static_cast<TImpl *>(this);
+            }
+
+            [[nodiscard]] TImpl && ScheduleOn(ITaskScheduler & taskScheduler) &&
+            {
+                handle.promise().TaskScheduler(&taskScheduler);
+                return std::move(*static_cast<TImpl *>(this));
+            }
+
+            TImpl & ContinueOn(ITaskScheduler & taskScheduler) &
+            {
+                handle.promise().ContinuationScheduler(&taskScheduler);
+                return *static_cast<TImpl *>(this);
+            }
+
+            [[nodiscard]] TImpl && ContinueOn(ITaskScheduler & taskScheduler) &&
+            {
+                handle.promise().ContinuationScheduler(&taskScheduler);
+                return std::move(*static_cast<TImpl *>(this));
+            }
+
+        protected:
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
+            {
+                return Awaitable<TResult>(TaskAwaitable<TResult, false>(handle));
+            }
+
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
+            {
+                return Awaitable<TResult>(TaskAwaitable<TResult, true>(handle));
+            }
+        };
+
     }  // namespace Detail
 
+    // clang-format off
     template <typename TResult>
-    class [[nodiscard]] Task<TResult, Detail::TaskPromise<TResult>> final : public ITask<TResult>
+    class [[nodiscard]] Task<TResult, Detail::TaskPromise<TResult>> final
+        : public Detail::TaskBase<TResult, Task<TResult, Detail::TaskPromise<TResult>>>
+    // clang-format on
     {
     public:
+        using base_type = Detail::TaskBase<TResult, Task<TResult, Detail::TaskPromise<TResult>>>;
+
         using value_type = TResult;
         using promise_type = Detail::TaskPromise<TResult>;
         using handle_type = std::coroutine_handle<promise_type>;
 
-    private:
-        handle_type handle;
-
     public:
-        explicit Task(handle_type handle) noexcept : handle(handle) { }
+        explicit Task(handle_type handle) noexcept : base_type(handle) {}
 
         Task(Task const &) = delete;
         Task & operator=(Task const &) = delete;
 
-        Task(Task && other) noexcept : handle(std::exchange(other.handle, nullptr)) { }
+        Task(Task&& other) noexcept : base_type(std::move(other)) {}
 
         Task & operator=(Task && other) noexcept
         {
-            if (std::addressof(other) == this)
-            {
-                return *this;
-            }
-
-            if (handle)
-            {
-                if (handle.promise().State() == TaskState::Running)
-                {
-                    // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
-                    //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
-                }
-
-                handle.destroy();
-            }
-
-            handle = std::exchange(other.handle, nullptr);
-
+            base_type::operator=(std::move(other));
             return *this;
-        }
-
-        ~Task() noexcept override
-        {
-            if (handle)
-            {
-                if (handle.promise().State() == TaskState::Running)
-                {
-                    // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
-                    //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
-                }
-
-                handle.destroy();
-            }
-        }
-
-        [[nodiscard]] operator ScheduleItem() const
-        {
-            if (!handle)
-            {
-                throw std::exception("Invalid handle");
-            }
-
-            // ToDo: maybe add promise to ScheduleItem and call TrySetScheduled elsewhere
-            if (!handle.promise().TrySetScheduled())
-            {
-                throw std::exception("Unable to schedule task");
-            }
-
-            return ScheduleItem(std::coroutine_handle<>(handle));
         }
 
         // ToDo: use concept
@@ -390,159 +476,76 @@ namespace TaskSystem::v1_1
             scheduler->Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
         }
 
-        auto operator co_await() const & noexcept { return Detail::TaskAwaitable<TResult, false>(handle); }
-        auto operator co_await() const && noexcept { return Detail::TaskAwaitable<TResult, true>(handle); }
-
-        [[nodiscard]] TaskState State() const noexcept override
-        {
-            if (!handle)
-            {
-                return TaskState::Unknown;
-            }
-
-            return handle.promise().State();
-        }
-
-        void Wait() const noexcept override
-        {
-            if (!handle)
-            {
-                return;
-            }
-
-            handle.promise().Wait();
-        }
-
         [[nodiscard]] TResult & Result() & override
         {
-            Wait();
-            return handle.promise().Result();
-        }
-
-        [[nodiscard]] TResult const & Result() const & override
-        {
-            Wait();
-            return handle.promise().Result();
-        }
-
-        [[nodiscard]] TResult && Result() && override
-        {
-            Wait();
-            return std::move(handle.promise().Result());
-        }
-
-        [[nodiscard]] TResult const && Result() const && override
-        {
-            Wait();
-            return std::move(handle.promise().Result());
-        }
-
-        Task & ScheduleOn(ITaskScheduler & taskScheduler) &
-        {
-            handle.promise().TaskScheduler(&taskScheduler);
-            return *this;
-        }
-
-        [[nodiscard]] Task && ScheduleOn(ITaskScheduler & taskScheduler) &&
-        {
-            handle.promise().TaskScheduler(&taskScheduler);
-            return std::move(*this);
-        }
-
-        Task & ContinueOn(ITaskScheduler & taskScheduler) &
-        {
-            handle.promise().ContinuationScheduler(&taskScheduler);
-            return *this;
-        }
-
-        [[nodiscard]] Task && ContinueOn(ITaskScheduler & taskScheduler) &&
-        {
-            handle.promise().ContinuationScheduler(&taskScheduler);
-            return std::move(*this);
-        }
-
-    protected:
-        [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
-        {
-            return Awaitable<TResult>(Detail::TaskAwaitable<TResult, false>(handle));
-        }
-
-        [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
-        {
-            return Awaitable<TResult>(Detail::TaskAwaitable<TResult, true>(handle));
-        }
-    };
-
-    template <>
-    class [[nodiscard]] Task<void, Detail::TaskPromise<void>> final : public ITask<void>
-    {
-    public:
-        using value_type = void;
-        using promise_type = Detail::TaskPromise<void>;
-        using handle_type = std::coroutine_handle<promise_type>;
-
-    private:
-        handle_type handle;
-
-    public:
-        explicit Task(handle_type handle) noexcept : handle(handle) { }
-
-        Task(Task const &) = delete;
-        Task & operator=(Task const &) = delete;
-
-        Task(Task && other) noexcept : handle(std::exchange(other.handle, nullptr)) { }
-
-        Task & operator=(Task && other) noexcept
-        {
-            if (std::addressof(other) == this)
-            {
-                return *this;
-            }
-
-            if (handle)
-            {
-                if (handle.promise().State() == TaskState::Running)
-                {
-                    // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
-                    //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
-                }
-
-                handle.destroy();
-            }
-
-            handle = std::exchange(other.handle, nullptr);
-
-            return *this;
-        }
-
-        ~Task() noexcept override
-        {
-            if (handle)
-            {
-                if (handle.promise().State() == TaskState::Running)
-                {
-                    // ToDo: either throw and loose the noexcept, or wait for completion and maybe deadlock
-                    //       maybe add orphaned flag to promise so it can clean up when transferring to continuation?
-                }
-
-                handle.destroy();
-            }
-        }
-
-        [[nodiscard]] operator ScheduleItem() const
-        {
-            if (!handle)
+            if (!this->handle)
             {
                 throw std::exception("Invalid handle");
             }
 
-            // ToDo: maybe add promise to ScheduleItem and call TrySetScheduled elsewhere
-            if (!handle.promise().TrySetScheduled())
+            this->Wait();
+            return this->handle.promise().Result();
+        }
+
+        [[nodiscard]] TResult const & Result() const & override
+        {
+            if (!this->handle)
             {
-                throw std::exception("Unable to schedule task");
+                throw std::exception("Invalid handle");
             }
 
-            return ScheduleItem(std::coroutine_handle<>(handle));
+            this->Wait();
+            return this->handle.promise().Result();
+        }
+
+        [[nodiscard]] TResult && Result() && override
+        {
+            if (!this->handle)
+            {
+                throw std::exception("Invalid handle");
+            }
+
+            this->Wait();
+            return std::move(this->handle.promise().Result());
+        }
+
+        [[nodiscard]] TResult const && Result() const && override
+        {
+            if (!this->handle)
+            {
+                throw std::exception("Invalid handle");
+            }
+
+            this->Wait();
+            return std::move(this->handle.promise().Result());
+        }
+    };
+
+    // clang-format off
+    template <>
+    class [[nodiscard]] Task<void, Detail::TaskPromise<void>> final
+        : public Detail::TaskBase<void, Task<void, Detail::TaskPromise<void>>>
+    // clang-format on
+    {
+    public:
+        using base_type = Detail::TaskBase<void, Task<void, Detail::TaskPromise<void>>>;
+
+        using value_type = void;
+        using promise_type = Detail::TaskPromise<void>;
+        using handle_type = std::coroutine_handle<promise_type>;
+
+    public:
+        explicit Task(handle_type handle) noexcept : base_type(handle) { }
+
+        Task(Task const &) = delete;
+        Task & operator=(Task const &) = delete;
+
+        Task(Task<void, Detail::TaskPromise<void>> && other) noexcept : base_type(std::move(other)) { }
+
+        Task & operator=(Task && other) noexcept
+        {
+            base_type::operator=(std::move(other));
+            return *this;
         }
 
         // ToDo: use concept
@@ -567,48 +570,15 @@ namespace TaskSystem::v1_1
             scheduler->Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
         }
 
-        auto operator co_await() const & noexcept { return Detail::TaskAwaitable<void, false>(handle); }
-        auto operator co_await() const && noexcept { return Detail::TaskAwaitable<void, false>(handle); }
-
-        [[nodiscard]] TaskState State() const noexcept override
-        {
-            if (!handle)
-            {
-                return TaskState::Unknown;
-            }
-
-            return handle.promise().State();
-        }
-
-        void Wait() const noexcept override
-        {
-            if (!handle)
-            {
-                return;
-            }
-
-            handle.promise().Wait();
-        }
-
         void ThrowIfFaulted() const override
         {
-            if (!handle)
+            if (!this->handle)
             {
-                return;
+                throw std::exception("Invalid handle");
             }
 
-            handle.promise().ThrowIfFaulted();
-        }
-
-    protected:
-        [[nodiscard]] Awaitable<void> GetAwaitable() const & noexcept override
-        {
-            return Awaitable<void>(Detail::TaskAwaitable<void, false>(handle));
-        }
-
-        [[nodiscard]] Awaitable<void> GetAwaitable() const && noexcept override
-        {
-            return Awaitable<void>(Detail::TaskAwaitable<void, true>(handle));
+            this->Wait();
+            this->handle.promise().ThrowIfFaulted();
         }
     };
 
@@ -630,6 +600,6 @@ namespace TaskSystem::v1_1
             return Task<void, TaskPromise<void>>(handle_type::from_promise(*this));
         }
 
-    }
+    }  // namespace Detail
 
 }  // namespace TaskSystem::v1_1
