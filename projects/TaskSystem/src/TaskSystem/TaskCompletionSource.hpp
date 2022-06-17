@@ -30,6 +30,7 @@ namespace TaskSystem
             static inline constexpr bool CanSuspend = false;
         };
 
+        // ToDo: TaskCompletionSourcePromise should std::enable_shared_from_this
         template <typename TResult>
         using TaskCompletionSourcePromise = Promise<TResult, TaskCompletionSourcePromisePolicy>;
 
@@ -105,6 +106,7 @@ namespace TaskSystem
             using handle_type = void;
 
         protected:
+            // ToDo: std::shared_ptr<promise_type>
             promise_type & promise;
 
         public:
@@ -124,12 +126,12 @@ namespace TaskSystem
             void ContinueOn(ITaskScheduler & taskScheduler) & { promise.ContinuationScheduler(&taskScheduler); }
 
         protected:
-            [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() & noexcept override
             {
                 return Awaitable<TResult>(Detail::TaskCompletionSourceAwaitable<TResult, false>(promise));
             }
 
-            [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() && noexcept override
             {
                 return Awaitable<TResult>(Detail::TaskCompletionSourceAwaitable<TResult, true>(promise));
             }
@@ -259,6 +261,7 @@ namespace TaskSystem
         class TaskCompletionSourceBase
         {
         protected:
+            // ToDo: std::shared_ptr
             Detail::TaskCompletionSourcePromise<TResult> promise;
 
         public:

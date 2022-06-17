@@ -10,6 +10,7 @@
 #include <TaskSystem/ITaskScheduler.hpp>
 #include <TaskSystem/ScheduleItem.hpp>
 #include <TaskSystem/TaskState.hpp>
+#include <TaskSystem/ValueTask.hpp>
 
 #include <atomic>
 #include <cassert>
@@ -248,7 +249,10 @@ namespace TaskSystem
 
             TaskFinalSuspend<promise_type> final_suspend() noexcept { return TaskFinalSuspend<promise_type>(*this); }
 
-            void unhandled_exception() noexcept { this->TrySetException(std::current_exception()); }
+            void unhandled_exception() noexcept
+            {
+                [[maybe_unused]] auto _ = this->TrySetException(std::current_exception());
+            }
 
             [[nodiscard]] ITaskScheduler * TaskScheduler() const noexcept override { return taskScheduler; }
 
@@ -267,7 +271,7 @@ namespace TaskSystem
 
             void return_value(std::convertible_to<TResult> auto && value) noexcept
             {
-                this->TrySetResult(std::forward<decltype(value)>(value));
+                [[maybe_unused]] auto _ = this->TrySetResult(std::forward<decltype(value)>(value));
             }
         };
 
@@ -410,12 +414,12 @@ namespace TaskSystem
             }
 
         protected:
-            [[nodiscard]] Awaitable<TResult> GetAwaitable() const & noexcept override
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() & noexcept override
             {
                 return Awaitable<TResult>(TaskAwaitable<TResult, false>(handle));
             }
 
-            [[nodiscard]] Awaitable<TResult> GetAwaitable() const && noexcept override
+            [[nodiscard]] Awaitable<TResult> GetAwaitable() && noexcept override
             {
                 return Awaitable<TResult>(TaskAwaitable<TResult, true>(handle));
             }
@@ -466,6 +470,16 @@ namespace TaskSystem
         static void Run(TFunc && func, ITaskScheduler & scheduler)
         {
             scheduler.Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
+        }
+
+        [[nodiscard]] static ValueTask<TResult> FromResult(TResult const & result)
+        {
+            return ValueTask<TResult>(result);
+        }
+
+        [[nodiscard]] static ValueTask<TResult> FromResult(TResult && result)
+        {
+            return ValueTask<TResult>(std::move(result));
         }
 
         [[nodiscard]] TResult & Result() & override
@@ -568,6 +582,16 @@ namespace TaskSystem
         static void Run(TFunc && func, ITaskScheduler & scheduler)
         {
             scheduler.Schedule(ScheduleItem(From(std::forward<TFunc>(func))));
+        }
+
+        [[nodiscard]] static ValueTask<TResult &> FromResult(TResult const & result)
+        {
+            return ValueTask<TResult &>(result);
+        }
+
+        [[nodiscard]] static ValueTask<TResult> FromResult(TResult && result)
+        {
+            return ValueTask<TResult>(std::move(result));
         }
 
         [[nodiscard]] TResult & Result() override
