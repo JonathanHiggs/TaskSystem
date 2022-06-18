@@ -32,7 +32,9 @@ namespace TaskSystem
 
         // ToDo: TaskCompletionSourcePromise should std::enable_shared_from_this
         template <typename TResult>
-        using TaskCompletionSourcePromise = Promise<TResult, TaskCompletionSourcePromisePolicy>;
+        class TaskCompletionSourcePromise final : public Promise<TResult, TaskCompletionSourcePromisePolicy>
+        {
+        };
 
         template <typename TResult, bool MoveResult>
         class TaskCompletionSourceAwaitable final
@@ -70,7 +72,7 @@ namespace TaskSystem
                 }
 
                 // Suspend the caller and don't schedule anything new
-                if (!promise.TrySetContinuation(Detail::Continuation(&callerPromise, callerHandle, CurrentScheduler())))
+                if (!promise.TrySetContinuation(Detail::Continuation(callerPromise, CurrentScheduler())))
                 {
                     // Maybe: check is status is completed and return caller handle;
                     throw std::exception("Unable to schedule continuation");

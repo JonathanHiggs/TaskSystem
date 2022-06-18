@@ -1,14 +1,22 @@
 #pragma once
 
 #include <TaskSystem/Detail/Continuation.hpp>
-#include <TaskSystem/ITaskScheduler.hpp>
 #include <TaskSystem/TaskState.hpp>
 
 #include <exception>
 
+namespace TaskSystem
+{
+    class ITaskScheduler;
+}
 
 namespace TaskSystem::Detail
 {
+    struct IgnoreAlreadySetTag
+    {
+    };
+
+    constexpr IgnoreAlreadySetTag IgnoreAlreadySet{};
 
     class IPromise
     {
@@ -16,6 +24,8 @@ namespace TaskSystem::Detail
         virtual ~IPromise() noexcept = default;
 
         [[nodiscard]] virtual TaskState State() const noexcept = 0;
+
+        [[nodiscard]] virtual std::coroutine_handle<> Handle() noexcept = 0;
 
         [[nodiscard]] virtual Detail::Continuation const & Continuation() const noexcept = 0;
 
@@ -29,7 +39,10 @@ namespace TaskSystem::Detail
         virtual void TaskScheduler(ITaskScheduler * value) noexcept { }
 
         [[nodiscard]] virtual bool TrySetScheduled() noexcept = 0;
+
         [[nodiscard]] virtual bool TrySetRunning() noexcept = 0;
+        [[nodiscard]] virtual bool TrySetRunning(IgnoreAlreadySetTag) noexcept = 0;
+
         [[nodiscard]] virtual bool TrySetSuspended() noexcept = 0;
         // ToDo: TrySetCancelled;
         [[nodiscard]] virtual bool TrySetException(std::exception_ptr ex) noexcept = 0;

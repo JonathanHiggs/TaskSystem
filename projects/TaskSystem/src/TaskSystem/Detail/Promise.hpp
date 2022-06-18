@@ -151,6 +151,31 @@ namespace TaskSystem::Detail
             }
         }
 
+        [[nodiscard]] bool TrySetRunning(IgnoreAlreadySetTag) noexcept override final
+        {
+            if constexpr (!TPolicy::CanRun)
+            {
+                return false;
+            }
+            else
+            {
+                std::lock_guard lock(stateFlag);
+
+                if (StateIsOneOf<Running>())
+                {
+                    return true;
+                }
+
+                if (!StateIsOneOf<Created, Scheduled, Suspended>())
+                {
+                    return false;
+                }
+
+                state = Running{};
+                return true;
+            }
+        }
+
         [[nodiscard]] bool TrySetSuspended() noexcept override final
         {
             if constexpr (!TPolicy::CanSuspend)
@@ -189,7 +214,7 @@ namespace TaskSystem::Detail
                     {
                         auto * scheduler = FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
 
-                        scheduler->Schedule(continuation.Handle());
+                        scheduler->Schedule(continuation.Promise());
                     }
                 }
             }
@@ -212,6 +237,8 @@ namespace TaskSystem::Detail
     {
     public:
         ~Promise() noexcept override = default;
+
+        [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
         [[nodiscard]] bool TrySetResult(std::convertible_to<TResult> auto && value) noexcept
         {
@@ -246,7 +273,7 @@ namespace TaskSystem::Detail
                         auto * scheduler
                             = FirstOf(this->continuation.Scheduler(), this->continuationScheduler, DefaultScheduler());
 
-                        scheduler->Schedule(this->continuation.Handle());
+                        scheduler->Schedule(this->continuation.Promise());
                     }
                 }
             }
@@ -328,6 +355,8 @@ namespace TaskSystem::Detail
     public:
         ~Promise() noexcept override = default;
 
+        [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
+
         [[nodiscard]] bool TrySetResult(TResult & value) noexcept
         {
             {
@@ -385,6 +414,8 @@ namespace TaskSystem::Detail
     {
     public:
         ~Promise() noexcept override = default;
+
+        [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
         [[nodiscard]] bool TrySetCompleted() noexcept
         {

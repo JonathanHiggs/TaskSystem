@@ -1,10 +1,13 @@
+#include <TaskSystem/Detail/IPromise.hpp>
 #include <TaskSystem/ScheduleItem.hpp>
 
 
 namespace TaskSystem
 {
 
-    ScheduleItem::ScheduleItem(handle_type handle) noexcept : item(handle) { }
+    ScheduleItem::ScheduleItem(promise_type & promise) noexcept : item(&promise) { }
+
+    ScheduleItem::ScheduleItem(promise_type_ptr promise) noexcept : item(promise) { }
 
     ScheduleItem::ScheduleItem(lambda_type lambda) noexcept : item(lambda) { }
 
@@ -12,14 +15,30 @@ namespace TaskSystem
 
     std::exception_ptr ScheduleItem::Run() noexcept
     {
-        if (auto * handle = std::get_if<handle_type>(&item))
+        if (auto * ppromise = std::get_if<promise_type_ptr>(&item))
         {
-            if (!handle || handle->done())
+            if (!(*ppromise))
             {
                 // ToDo:
+                return nullptr;
             }
-            // Maybe: might want to set the executing scheduler in a way the promise can see it?
-            handle->resume();
+
+            promise_type & promise = **ppromise;
+
+            if (!promise.TrySetRunning())
+            {
+                // ToDo:
+                return nullptr;
+            }
+
+            auto handle = promise.Handle();
+            if (!handle || handle.done())
+            {
+                // ToDo:
+                return nullptr;
+            }
+
+            handle.resume();
         }
         else if (auto * lambda = std::get_if<lambda_type>(&item))
         {

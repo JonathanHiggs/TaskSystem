@@ -2,6 +2,7 @@
 #include <TaskSystem/Task.hpp>
 #include <TaskSystem/Utils/Tracked.hpp>
 
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include <thread>
@@ -441,7 +442,7 @@ namespace TaskSystem::Tests
 
         EXPECT_EQ(innerTask.State(), TaskState::Completed);
         EXPECT_EQ(innerTask.Result(), expected);
-        EXPECT_EQ(task.State(), TaskState::Suspended);
+        EXPECT_EQ(task.State(), TaskState::Scheduled);
         EXPECT_TRUE(innerTaskCompleted);
         EXPECT_FALSE(taskCompleted);
 

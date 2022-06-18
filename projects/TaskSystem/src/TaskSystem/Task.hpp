@@ -71,10 +71,9 @@ namespace TaskSystem
 
             void await_resume() const
             {
-                // Check this thread set the promise to running
-                if (!promise.TrySetRunning())
+                if (!promise.TrySetRunning(IgnoreAlreadySet))
                 {
-                    throw std::exception("Unable to set task running");
+                    throw std::exception();
                 }
             }
         };
@@ -114,13 +113,15 @@ namespace TaskSystem
 
                 if (!scheduler || IsCurrentScheduler(scheduler))
                 {
-                    // Check: continuation state is set to running?
+                    [[maybe_unused]] auto _ = continuation.Promise().TrySetRunning();
                     return continuation.Handle();
                 }
 
                 // Schedule continuation to run on different scheduler
-                // Check: continuation state is set to scheduled?
-                scheduler->Schedule(ScheduleItem(continuation.Handle()));
+                if (continuation.Promise().TrySetScheduled())
+                {
+                    scheduler->Schedule(ScheduleItem(continuation.Promise()));
+                }
 
                 return std::noop_coroutine();
             }
@@ -163,14 +164,13 @@ namespace TaskSystem
                     throw std::exception("Unable to set caller promise to suspended");
                 }
 
-                if (!handle.promise().TrySetContinuation(
-                        Detail::Continuation(&callerPromise, callerHandle)))  // ToDo: current scheduler?
+                // ToDo: current scheduler?
+                if (!handle.promise().TrySetContinuation(Detail::Continuation(callerPromise)))
                 {
                     // throw std::exception("Unable to set continuation");
                     assert(false);
                 }
 
-                // Maybe: template on the caller promise type, can read the current scheduler out of the promise?
                 auto * scheduler = handle.promise().TaskScheduler();
                 if (scheduler && !IsCurrentScheduler(scheduler))
                 {
@@ -181,13 +181,12 @@ namespace TaskSystem
                     return std::noop_coroutine();
                 }
 
-                if (!handle.promise().TrySetScheduled())
+                if (handle.promise().TrySetRunning())
                 {
-                    // ToDo: should never happen
-                    return std::noop_coroutine();
+                    return handle;
                 }
 
-                return handle;
+                return std::noop_coroutine();
             }
 
             TResult await_resume()
@@ -267,6 +266,12 @@ namespace TaskSystem
             using handle_type = std::coroutine_handle<promise_type>;
             using task_type = Task<TResult, promise_type>;
 
+        public:
+            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override
+            {
+                return handle_type::from_promise(*this);
+            }
+
             task_type get_return_object() noexcept { return task_type(handle_type::from_promise(*this)); }
 
             void return_value(std::convertible_to<TResult> auto && value) noexcept
@@ -276,16 +281,22 @@ namespace TaskSystem
         };
 
         template <typename TResult>
-        class TaskPromise<TResult &> : public TaskPromiseBase<TResult &, TaskPromise<TResult &>>
+        class TaskPromise<TResult &> final : public TaskPromiseBase<TResult &, TaskPromise<TResult &>>
         {
         public:
             using promise_type = TaskPromise<TResult &>;
             using handle_type = std::coroutine_handle<promise_type>;
             using task_type = Task<TResult &, TaskPromise<TResult &>>;
 
+        public:
+            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override
+            {
+                return handle_type::from_promise(*this);
+            }
+
             task_type get_return_object() noexcept { return task_type(handle_type::from_promise(*this)); }
 
-            void return_value(TResult & value) noexcept { this->TrySetResult(value); }
+            void return_value(TResult & value) noexcept { [[maybe_unused]] auto _ = this->TrySetResult(value); }
         };
 
         template <>
@@ -294,6 +305,12 @@ namespace TaskSystem
         public:
             using promise_type = TaskPromise;
             using handle_type = std::coroutine_handle<promise_type>;
+
+        public:
+            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override
+            {
+                return handle_type::from_promise(*this);
+            }
 
             Task<void, TaskPromise<void>> get_return_object() noexcept;
 
@@ -380,7 +397,7 @@ namespace TaskSystem
                     throw std::exception("Unable to schedule task");
                 }
 
-                return ScheduleItem(std::coroutine_handle<>(handle));
+                return ScheduleItem(handle.promise());
             }
 
             auto operator co_await() const & noexcept { return TaskAwaitable<TResult, false>(handle); }
