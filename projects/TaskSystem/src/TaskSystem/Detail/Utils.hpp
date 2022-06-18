@@ -32,4 +32,16 @@ namespace TaskSystem::Detail
         return value3;
     }
 
+    template <typename T>
+    inline T * FirstOf(T * value1, T * value2, T * value3, T * value4)
+    {
+        auto * result = FirstOf(value1, value2, value3);
+        if (result)
+        {
+            return result;
+        }
+
+        return value4;
+    }
+
 }  // namespace TaskSystem::Detail

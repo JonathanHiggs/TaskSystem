@@ -96,32 +96,34 @@ namespace TaskSystem
 
             std::coroutine_handle<> await_suspend(std::coroutine_handle<>) const noexcept
             {
-                auto continuation = promise.Continuation();
-                if (!continuation)
-                {
-                    return std::noop_coroutine();
-                }
-
                 // Maybe: possible optimization - avoid schedule and rethrow
                 // if (promise.State() == TaskState::Error)
                 // {
                 //     continuation.SetError(promise.ExceptionPtr());
                 // }
 
-                auto * scheduler
-                    = Detail::FirstOf(continuation.Scheduler(), promise.ContinuationScheduler(), DefaultScheduler());
-
-                if (!scheduler || IsCurrentScheduler(scheduler))
+                // ToDo: should have a lock while accessing continuations?
+                for (auto & continuation : promise.Continuations())
                 {
-                    [[maybe_unused]] auto _ = continuation.Promise().TrySetRunning();
-                    return continuation.Handle();
+                    auto * scheduler = Detail::FirstOf(
+                        continuation.Scheduler(),
+                        promise.ContinuationScheduler(),
+                        DefaultScheduler(),
+                        CurrentScheduler());
+
+                    // Schedule continuation to run on different scheduler
+                    if (continuation.Promise().TrySetScheduled())
+                    {
+                        scheduler->Schedule(ScheduleItem(continuation.Promise()));
+                    }
                 }
 
-                // Schedule continuation to run on different scheduler
-                if (continuation.Promise().TrySetScheduled())
-                {
-                    scheduler->Schedule(ScheduleItem(continuation.Promise()));
-                }
+                // ToDo: Optimization for a promise on same scheduler use symetric transfer
+                // if (!scheduler || IsCurrentScheduler(scheduler))
+                // {
+                //     [[maybe_unused]] auto _ = continuation.Promise().TrySetRunning();
+                //     return continuation.Handle();
+                // }
 
                 return std::noop_coroutine();
             }
@@ -164,8 +166,7 @@ namespace TaskSystem
                     throw std::exception("Unable to set caller promise to suspended");
                 }
 
-                // ToDo: current scheduler?
-                if (!handle.promise().TrySetContinuation(Detail::Continuation(callerPromise)))
+                if (!handle.promise().TryAddContinuation(Detail::Continuation(callerPromise)))
                 {
                     // throw std::exception("Unable to set continuation");
                     assert(false);

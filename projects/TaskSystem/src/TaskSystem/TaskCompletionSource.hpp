@@ -72,7 +72,7 @@ namespace TaskSystem
                 }
 
                 // Suspend the caller and don't schedule anything new
-                if (!promise.TrySetContinuation(Detail::Continuation(callerPromise, CurrentScheduler())))
+                if (!promise.TryAddContinuation(Detail::Continuation(callerPromise, CurrentScheduler())))
                 {
                     // Maybe: check is status is completed and return caller handle;
                     throw std::exception("Unable to schedule continuation");

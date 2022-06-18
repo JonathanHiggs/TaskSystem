@@ -1,6 +1,6 @@
 #pragma once
 
-#include <TaskSystem/Detail/Continuation.hpp>
+#include <TaskSystem/Detail/Continuations.hpp>
 #include <TaskSystem/TaskState.hpp>
 
 #include <exception>
@@ -27,10 +27,8 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] virtual std::coroutine_handle<> Handle() noexcept = 0;
 
-        [[nodiscard]] virtual Detail::Continuation const & Continuation() const noexcept = 0;
-
-        // ToDo: TryAddContinuation
-        [[nodiscard]] virtual bool TrySetContinuation(Detail::Continuation value) noexcept = 0;
+        [[nodiscard]] virtual Detail::Continuations & Continuations() noexcept = 0;
+        [[nodiscard]] virtual bool TryAddContinuation(Detail::Continuation value) noexcept = 0;
 
         [[nodiscard]] virtual ITaskScheduler * ContinuationScheduler() const noexcept = 0;
         virtual void ContinuationScheduler(ITaskScheduler * value) noexcept = 0;

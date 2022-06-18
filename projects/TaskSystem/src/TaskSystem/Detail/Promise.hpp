@@ -48,7 +48,7 @@ namespace TaskSystem::Detail
 
         state_type state = Created{};
 
-        Detail::Continuation continuation = nullptr;
+        Detail::Continuations continuations{};
         ITaskScheduler * continuationScheduler = nullptr;
 
         template <typename... Ts>
@@ -81,10 +81,9 @@ namespace TaskSystem::Detail
             }
         }
 
-        [[nodiscard]] Detail::Continuation const & Continuation() const noexcept override final { return continuation; }
+        [[nodiscard]] Detail::Continuations & Continuations() noexcept override final { return continuations; }
 
-        // ToDo: TryAddContinuation
-        [[nodiscard]] bool TrySetContinuation(Detail::Continuation value) noexcept override final
+        [[nodiscard]] bool TryAddContinuation(Detail::Continuation value) noexcept override final
         {
             if (!value)
             {
@@ -98,7 +97,7 @@ namespace TaskSystem::Detail
                 return false;
             }
 
-            continuation = std::move(value);
+            continuations.Add(std::move(value));
 
             return true;
         }
@@ -210,7 +209,7 @@ namespace TaskSystem::Detail
 
                 if constexpr (TPolicy::ScheduleContinuations)
                 {
-                    if (continuation)
+                    for (auto & continuation : continuations)
                     {
                         auto * scheduler = FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
 
@@ -268,12 +267,13 @@ namespace TaskSystem::Detail
 
                 if constexpr (TPolicy::ScheduleContinuations)
                 {
-                    if (this->continuation)
+                    for (auto & continuation : this->continuations)
                     {
                         auto * scheduler
-                            = FirstOf(this->continuation.Scheduler(), this->continuationScheduler, DefaultScheduler());
+                            = FirstOf(continuation.Scheduler(), this->continuationScheduler, DefaultScheduler());
 
-                        scheduler->Schedule(this->continuation.Promise());
+                        [[maybe_unused]] auto _ = continuation.Promise().TrySetScheduled();
+                        scheduler->Schedule(continuation.Promise());
                     }
                 }
             }
