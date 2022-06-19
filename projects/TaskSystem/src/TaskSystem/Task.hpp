@@ -29,7 +29,7 @@ namespace TaskSystem
         class TaskPromise;
     }
 
-    template <typename TResult, typename TPromise = Detail::TaskPromise<TResult>>
+    template <typename TResult = void, typename TPromise = Detail::TaskPromise<TResult>>
     class Task;
 
     namespace Detail
@@ -147,6 +147,7 @@ namespace TaskSystem
 
             constexpr bool await_ready() const noexcept { return false; }
 
+            // ToDo: use PromiseType concept
             template <typename TPromise>
             std::coroutine_handle<> await_suspend(std::coroutine_handle<TPromise> callerHandle)
             {
@@ -226,6 +227,7 @@ namespace TaskSystem
             static inline constexpr bool CanSchedule = true;
             static inline constexpr bool CanRun = true;
             static inline constexpr bool CanSuspend = true;
+            static inline constexpr bool AllowSuspendFromCreated = false;
         };
 
         template <typename TResult, typename TImpl>
@@ -429,6 +431,11 @@ namespace TaskSystem
             void ContinueOn(ITaskScheduler & taskScheduler) &
             {
                 handle.promise().ContinuationScheduler(&taskScheduler);
+            }
+
+            void ContinueWith(Detail::Continuation && continuation)
+            {
+                handle.promise().TryAddContinuation(std::move(continuation));
             }
 
         protected:

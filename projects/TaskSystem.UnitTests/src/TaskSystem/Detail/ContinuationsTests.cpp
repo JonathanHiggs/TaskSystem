@@ -17,6 +17,7 @@ namespace TaskSystem::Detail::Tests
             static inline constexpr bool CanSchedule = true;
             static inline constexpr bool CanRun = true;
             static inline constexpr bool CanSuspend = true;
+            static inline constexpr bool AllowSuspendFromCreated = false;
         };
     }
 

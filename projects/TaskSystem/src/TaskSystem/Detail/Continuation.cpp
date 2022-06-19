@@ -6,7 +6,7 @@
 namespace TaskSystem::Detail
 {
 
-    Continuation::operator bool() const noexcept { return promise && promise->Handle() != nullptr; }
+    Continuation::operator bool() const noexcept { return promise; }
 
     std::coroutine_handle<> Continuation::Handle() { return promise->Handle(); }
 

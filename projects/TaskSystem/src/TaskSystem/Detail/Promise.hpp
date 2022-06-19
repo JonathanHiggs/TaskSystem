@@ -23,18 +23,29 @@ namespace TaskSystem::Detail
     concept PromisePolicy = requires
     {
         // clang-format off
+
         // ToDo: find out why std::same_as<bool> does not work
         { T::ScheduleContinuations } -> std::convertible_to<bool>;
         { T::CanSchedule } -> std::convertible_to<bool>;
         { T::CanRun } -> std::convertible_to<bool>;
         { T::CanSuspend } -> std::convertible_to<bool>;
+        { T::AllowSuspendFromCreated } -> std::convertible_to<bool>;
+        // Maybe: AllowSetRunningWhenRunning
+
         // clang-format on
     };
+
+    // Maybe:
+    // struct PromisePolicyDefaults
+    // {
+    //     static inline constexpr bool AllowSuspendFromCreated = false;
+    // };
 
     template <typename TResult, PromisePolicy TPolicy>
     class PromiseBase : public IPromise
     {
     protected:
+        using policy_type = TPolicy;
         using state_type = std::variant<Created, Scheduled, Running, Suspended, Completed<TResult>, Faulted>;
 
 #pragma warning(disable : 4324)
@@ -109,10 +120,10 @@ namespace TaskSystem::Detail
 
         void ContinuationScheduler(ITaskScheduler * value) noexcept override final { continuationScheduler = value; }
 
-        [[nodiscard]] bool TrySetScheduled() noexcept override final
+        [[nodiscard]] bool TrySetScheduled() noexcept override
         {
             // Maybe: two separate versions, one is constexpr
-            if constexpr (!TPolicy::CanSchedule)
+            if constexpr (!policy_type::CanSchedule)
             {
                 return false;
             }
@@ -132,7 +143,7 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] bool TrySetRunning() noexcept override final
         {
-            if constexpr (!TPolicy::CanRun)
+            if constexpr (!policy_type::CanRun)
             {
                 return false;
             }
@@ -152,7 +163,7 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] bool TrySetRunning(IgnoreAlreadySetTag) noexcept override final
         {
-            if constexpr (!TPolicy::CanRun)
+            if constexpr (!policy_type::CanRun)
             {
                 return false;
             }
@@ -177,7 +188,7 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] bool TrySetSuspended() noexcept override final
         {
-            if constexpr (!TPolicy::CanSuspend)
+            if constexpr (!policy_type::CanSuspend)
             {
                 return false;
             }
@@ -185,9 +196,19 @@ namespace TaskSystem::Detail
             {
                 std::lock_guard lock(stateFlag);
 
-                if (!StateIsOneOf<Running>())
+                if constexpr (policy_type::AllowSuspendFromCreated)
                 {
-                    return false;
+                    if (!StateIsOneOf<Created, Running>())
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (!StateIsOneOf<Running>())
+                    {
+                        return false;
+                    }
                 }
 
                 state = Suspended{};
@@ -206,16 +227,7 @@ namespace TaskSystem::Detail
                 }
 
                 state = Faulted{ ex };
-
-                if constexpr (TPolicy::ScheduleContinuations)
-                {
-                    for (auto & continuation : continuations)
-                    {
-                        auto * scheduler = FirstOf(continuation.Scheduler(), continuationScheduler, DefaultScheduler());
-
-                        scheduler->Schedule(continuation.Promise());
-                    }
-                }
+                this->ScheduleContinuations();
             }
 
             completeFlag.test_and_set(std::memory_order_acquire);
@@ -228,6 +240,36 @@ namespace TaskSystem::Detail
         {
             // Waits for TrySetResult, TrySetCompleted or TrySetException to set completeFlag to true
             completeFlag.wait(false, std::memory_order_acquire);
+        }
+
+    protected:
+        inline void ScheduleContinuations() noexcept override final
+        {
+            if constexpr (policy_type::ScheduleContinuations)
+            {
+                for (auto & continuation : this->continuations)
+                {
+                    auto * scheduler = FirstOf(
+                        continuation.Scheduler(),
+                        this->continuationScheduler,
+                        DefaultScheduler(),
+                        CurrentScheduler());
+
+                    // ToDo: Assert scheduler
+
+                    if (!continuation.Promise().TrySetScheduled())
+                    {
+                        if (continuation.Promise().State().IsCompleted())
+                        {
+                            continuation.Promise().ScheduleContinuations();
+                        }
+
+                        continue;
+                    }
+
+                    scheduler->Schedule(continuation.Promise());
+                }
+            }
         }
     };
 
@@ -265,17 +307,7 @@ namespace TaskSystem::Detail
                     }
                 }
 
-                if constexpr (TPolicy::ScheduleContinuations)
-                {
-                    for (auto & continuation : this->continuations)
-                    {
-                        auto * scheduler
-                            = FirstOf(continuation.Scheduler(), this->continuationScheduler, DefaultScheduler());
-
-                        [[maybe_unused]] auto _ = continuation.Promise().TrySetScheduled();
-                        scheduler->Schedule(continuation.Promise());
-                    }
-                }
+                this->ScheduleContinuations();
             }
 
             this->completeFlag.test_and_set(std::memory_order_acquire);
@@ -368,6 +400,7 @@ namespace TaskSystem::Detail
                 }
 
                 this->state = Completed<TResult *>{ std::addressof(value) };
+                this->ScheduleContinuations();
             }
 
             this->completeFlag.test_and_set(std::memory_order_acquire);
@@ -427,7 +460,8 @@ namespace TaskSystem::Detail
                     return false;
                 }
 
-                this->state = Completed<void>{};
+                this->state = Completed<>{};
+                this->ScheduleContinuations();
             }
 
             this->completeFlag.test_and_set(std::memory_order_acquire);

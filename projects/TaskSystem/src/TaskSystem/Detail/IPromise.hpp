@@ -5,13 +5,13 @@
 
 #include <exception>
 
-namespace TaskSystem
-{
-    class ITaskScheduler;
-}
+
+class TaskSystem::ITaskScheduler;
+
 
 namespace TaskSystem::Detail
 {
+
     struct IgnoreAlreadySetTag
     {
     };
@@ -27,6 +27,8 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] virtual std::coroutine_handle<> Handle() noexcept = 0;
 
+        // Maybe: void Resume() ?
+
         [[nodiscard]] virtual Detail::Continuations & Continuations() noexcept = 0;
         [[nodiscard]] virtual bool TryAddContinuation(Detail::Continuation value) noexcept = 0;
 
@@ -39,13 +41,18 @@ namespace TaskSystem::Detail
         [[nodiscard]] virtual bool TrySetScheduled() noexcept = 0;
 
         [[nodiscard]] virtual bool TrySetRunning() noexcept = 0;
+        // Maybe: Move to PromisePolicy::AllowSetRunningWhenRunning
         [[nodiscard]] virtual bool TrySetRunning(IgnoreAlreadySetTag) noexcept = 0;
 
         [[nodiscard]] virtual bool TrySetSuspended() noexcept = 0;
+
         // ToDo: TrySetCancelled;
+
         [[nodiscard]] virtual bool TrySetException(std::exception_ptr ex) noexcept = 0;
 
         virtual void Wait() const noexcept = 0;
+
+        virtual void ScheduleContinuations() noexcept = 0;
     };
 
     template <typename T>

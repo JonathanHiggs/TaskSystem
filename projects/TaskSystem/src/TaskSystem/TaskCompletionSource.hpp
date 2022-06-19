@@ -28,6 +28,7 @@ namespace TaskSystem
             static inline constexpr bool CanSchedule = false;
             static inline constexpr bool CanRun = false;
             static inline constexpr bool CanSuspend = false;
+            static inline constexpr bool AllowSuspendFromCreated = false;
         };
 
         // ToDo: TaskCompletionSourcePromise should std::enable_shared_from_this
@@ -126,6 +127,11 @@ namespace TaskSystem
             void ScheduleOn(ITaskScheduler & taskScheduler) & { }
 
             void ContinueOn(ITaskScheduler & taskScheduler) & { promise.ContinuationScheduler(&taskScheduler); }
+
+            void ContinueWith(Detail::Continuation && continuation)
+            {
+                [[maybe_unused]] auto _ = promise.TryAddContinuation(std::move(continuation));
+            }
 
         protected:
             [[nodiscard]] Awaitable<TResult> GetAwaitable() & noexcept override
@@ -282,7 +288,9 @@ namespace TaskSystem
                 return ::TaskSystem::Task<TResult, Detail::TaskCompletionSourcePromise<TResult>>(promise);
             }
 
-            template <typename TException, std::enable_if_t<!std::is_same_v<TException, std::exception_ptr>> * = nullptr>
+            template <
+                typename TException,
+                std::enable_if_t<!std::is_same_v<TException, std::exception_ptr>> * = nullptr>
             [[nodiscard]] bool TrySetException(TException && exception) noexcept
             {
                 return promise.TrySetException(std::make_exception_ptr(std::forward<TException>(exception)));
@@ -305,7 +313,10 @@ namespace TaskSystem
             }
         };
 
-    }
+    }  // namespace Detail
+
+    template <typename TResult = void>
+    class TaskCompletionSource;
 
     template <typename TResult>
     class TaskCompletionSource final : public Detail::TaskCompletionSourceBase<TResult>
@@ -332,10 +343,7 @@ namespace TaskSystem
     class TaskCompletionSource<void> final : public Detail::TaskCompletionSourceBase<void>
     {
     public:
-        [[nodiscard]] bool TrySetCompleted() noexcept
-        {
-            return this->promise.TrySetCompleted();
-        }
+        [[nodiscard]] bool TrySetCompleted() noexcept { return this->promise.TrySetCompleted(); }
 
         void SetCompleted()
         {

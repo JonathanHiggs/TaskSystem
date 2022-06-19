@@ -23,6 +23,9 @@ namespace TaskSystem::Detail
     {
     };
 
+    template <typename TResult = void>
+    struct Completed;
+
     template <typename TResult>
     struct Completed final
     {

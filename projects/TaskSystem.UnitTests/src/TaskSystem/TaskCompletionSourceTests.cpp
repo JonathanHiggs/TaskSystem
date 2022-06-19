@@ -205,7 +205,7 @@ namespace TaskSystem::Tests
         EXPECT_FALSE(taskCompletionSource.TrySetException(42));
     }
 
-    TEST(TaskCompletionSourceTests, multipleAwaitingTasks)
+    TEST(TaskCompletionSourceTests, multipleAwaitingTasksReturnValue)
     {
         // Arrange
         auto expected = 42;
@@ -269,6 +269,126 @@ namespace TaskSystem::Tests
 
         EXPECT_EQ(task6.State(), TaskState::Completed);
         EXPECT_EQ(task6.Result(), expected);
+    }
+
+    TEST(TaskCompletionSourceTests, multipleAwaitingTasksReturnRef)
+    {
+        // Arrange
+        auto expected = 42;
+        auto scheduler = SynchronousTaskScheduler();
+
+        auto taskCompletionSource = TaskCompletionSource<int &>();
+
+        auto taskFn = [&]() -> Task<int &> {
+            co_return co_await taskCompletionSource.Task();
+        };
+
+        auto task1 = taskFn();
+        auto task2 = taskFn();
+        auto task3 = taskFn();
+        auto task4 = taskFn();
+        auto task5 = taskFn();
+        auto task6 = taskFn();
+
+        scheduler.Schedule(task1);
+        scheduler.Schedule(task2);
+        scheduler.Schedule(task3);
+        scheduler.Schedule(task4);
+        scheduler.Schedule(task5);
+        scheduler.Schedule(task6);
+
+        // Act & Assert
+        scheduler.Run();
+
+        EXPECT_EQ(task1.State(), TaskState::Suspended);
+        EXPECT_EQ(task2.State(), TaskState::Suspended);
+        EXPECT_EQ(task3.State(), TaskState::Suspended);
+        EXPECT_EQ(task4.State(), TaskState::Suspended);
+        EXPECT_EQ(task5.State(), TaskState::Suspended);
+        EXPECT_EQ(task6.State(), TaskState::Suspended);
+
+        taskCompletionSource.SetResult(expected);
+
+        EXPECT_EQ(task1.State(), TaskState::Scheduled);
+        EXPECT_EQ(task2.State(), TaskState::Scheduled);
+        EXPECT_EQ(task3.State(), TaskState::Scheduled);
+        EXPECT_EQ(task4.State(), TaskState::Scheduled);
+        EXPECT_EQ(task5.State(), TaskState::Scheduled);
+        EXPECT_EQ(task6.State(), TaskState::Scheduled);
+
+        scheduler.Run();
+
+        EXPECT_EQ(task1.State(), TaskState::Completed);
+        EXPECT_EQ(task1.Result(), expected);
+
+        EXPECT_EQ(task2.State(), TaskState::Completed);
+        EXPECT_EQ(task2.Result(), expected);
+
+        EXPECT_EQ(task3.State(), TaskState::Completed);
+        EXPECT_EQ(task3.Result(), expected);
+
+        EXPECT_EQ(task4.State(), TaskState::Completed);
+        EXPECT_EQ(task4.Result(), expected);
+
+        EXPECT_EQ(task5.State(), TaskState::Completed);
+        EXPECT_EQ(task5.Result(), expected);
+
+        EXPECT_EQ(task6.State(), TaskState::Completed);
+        EXPECT_EQ(task6.Result(), expected);
+    }
+
+    TEST(TaskCompletionSourceTests, multipleAwaitingTasksReturnVoid)
+    {
+        // Arrange
+        auto scheduler = SynchronousTaskScheduler();
+
+        auto taskCompletionSource = TaskCompletionSource<>();
+
+        auto taskFn = [&]() -> Task<> {
+            co_await taskCompletionSource.Task();
+        };
+
+        auto task1 = taskFn();
+        auto task2 = taskFn();
+        auto task3 = taskFn();
+        auto task4 = taskFn();
+        auto task5 = taskFn();
+        auto task6 = taskFn();
+
+        scheduler.Schedule(task1);
+        scheduler.Schedule(task2);
+        scheduler.Schedule(task3);
+        scheduler.Schedule(task4);
+        scheduler.Schedule(task5);
+        scheduler.Schedule(task6);
+
+        // Act & Assert
+        scheduler.Run();
+
+        EXPECT_EQ(task1.State(), TaskState::Suspended);
+        EXPECT_EQ(task2.State(), TaskState::Suspended);
+        EXPECT_EQ(task3.State(), TaskState::Suspended);
+        EXPECT_EQ(task4.State(), TaskState::Suspended);
+        EXPECT_EQ(task5.State(), TaskState::Suspended);
+        EXPECT_EQ(task6.State(), TaskState::Suspended);
+
+        taskCompletionSource.SetCompleted();
+
+        EXPECT_EQ(task1.State(), TaskState::Scheduled);
+        EXPECT_EQ(task2.State(), TaskState::Scheduled);
+        EXPECT_EQ(task3.State(), TaskState::Scheduled);
+        EXPECT_EQ(task4.State(), TaskState::Scheduled);
+        EXPECT_EQ(task5.State(), TaskState::Scheduled);
+        EXPECT_EQ(task6.State(), TaskState::Scheduled);
+
+        scheduler.Run();
+
+        EXPECT_EQ(task1.State(), TaskState::Completed);
+        EXPECT_EQ(task2.State(), TaskState::Completed);
+        EXPECT_EQ(task3.State(), TaskState::Completed);
+        EXPECT_EQ(task4.State(), TaskState::Completed);
+        EXPECT_EQ(task5.State(), TaskState::Completed);
+        EXPECT_EQ(task6.State(), TaskState::Completed);
     }
 
 }  // namespace TaskSystem::Tests
