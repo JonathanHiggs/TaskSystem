@@ -30,4 +30,5 @@ target_include_directories(tasksystem PUBLIC
 
 target_link_libraries(tasksystem PUBLIC
     fmt::fmt
+    tl::expected
 )

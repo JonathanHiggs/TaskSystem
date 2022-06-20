@@ -18,5 +18,6 @@ enable_testing()
 
 find_package(fmt           CONFIG REQUIRED)
 find_package(GTest         CONFIG REQUIRED)
+find_package(tl-expected   CONFIG REQUIRED)
 
 add_subdirectory(projects)
