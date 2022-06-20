@@ -68,4 +68,105 @@ namespace TaskSystem::Tests
         EXPECT_EQ(outerTask.State(), TaskState::Completed);
     }
 
+    TEST(WhenAllTests, callerResumesWhenRvalueTask)
+    {
+        // Arrange
+        auto innerTaskFn = []() -> Task<> {
+            co_return;
+        };
+
+        auto outerTask = [&]() -> Task<> {
+            co_await WhenAll(innerTaskFn());
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act
+        scheduler.Schedule(outerTask);
+        scheduler.Run();
+
+        // Assert
+        EXPECT_EQ(outerTask.State(), TaskState::Completed);
+    }
+
+    TEST(WhenAllTests, callerResumesWhenCompletedTask)
+    {
+        // Arrange
+        auto innerTask = []() -> Task<> {
+            co_return;
+        }();
+
+        auto outerTask = [&]() -> Task<> {
+            co_await WhenAll(innerTask);
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+        scheduler.Schedule(innerTask);
+        scheduler.Run();
+
+        // Act
+        scheduler.Schedule(outerTask);
+        scheduler.Run();
+
+        // Assert
+        EXPECT_EQ(outerTask.State(), TaskState::Completed);
+    }
+
+    TEST(WhenAllTests, callerResumesWhenCompletedTask2)
+    {
+        // Arrange
+        auto taskCompletionSource = TaskCompletionSource<>();
+        taskCompletionSource.SetCompleted();
+
+        auto outerTask = [&]() -> Task<> {
+            co_await WhenAll(taskCompletionSource.Task());
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act
+        scheduler.Schedule(outerTask);
+        scheduler.Run();
+
+        // Assert
+        EXPECT_EQ(outerTask.State(), TaskState::Completed);
+    }
+
+    TEST(WhenAllTests, callerResumesWithValueTask)
+    {
+        // Arrange
+        auto innerTask1 = ValueTask<int>(42);
+        auto innerTask2 = ValueTask<int>(42);
+
+        auto outerTask = [&]() -> Task<> {
+            co_await WhenAll(innerTask1, innerTask2);
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act
+        scheduler.Schedule(outerTask);
+        scheduler.Run();
+
+        // Assert
+        EXPECT_EQ(outerTask.State(), TaskState::Completed);
+    }
+
+    TEST(WhenAllTests, callerResumesWithTempValueTask)
+    {
+        // Arrange
+        auto task = [&]() -> Task<> {
+            co_await WhenAll(ValueTask<int>(42), ValueTask<int>(42));
+        }();
+
+        auto scheduler = SynchronousTaskScheduler();
+
+        // Act
+        scheduler.Schedule(task);
+        scheduler.Run();
+
+        // Assert
+        EXPECT_EQ(task.State(), TaskState::Completed);
+    }
+
 }

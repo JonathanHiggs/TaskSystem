@@ -10,6 +10,10 @@
 
 namespace TaskSystem
 {
+
+    template <typename TResult = void>
+    class ValueTask;
+
     namespace Detail
     {
 
@@ -180,5 +184,11 @@ namespace TaskSystem
             return Awaitable<void>(Detail::ValueTaskAwaitable<void>());
         }
     };
+
+    template <typename T>
+    inline constexpr bool IsValueTask = false;
+
+    template <typename TResult>
+    inline constexpr bool IsValueTask<ValueTask<TResult>> = true;
 
 }  // namespace TaskSystem

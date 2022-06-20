@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TaskSystem/Detail/Promise.hpp>
+#include <TaskSystem/ValueTask.hpp>
 
 #include <atomic>
 #include <cassert>
@@ -31,10 +32,7 @@ namespace TaskSystem
         public:
             WhenAllPromise(size_t count) noexcept : count(count) { }
 
-            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override
-            {
-                return resumeHandle;
-            }
+            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return resumeHandle; }
 
             // Only allow continuation to be scheduled when the counter ticks to zero
             [[nodiscard]] bool TrySetScheduled() noexcept override
@@ -46,15 +44,20 @@ namespace TaskSystem
                     return false;
                 }
 
+                DecrementCount();
+                return false;
+            }
+
+            void DecrementCount() noexcept
+            {
                 auto value = count.fetch_sub(1u, std::memory_order_release);
 
                 if (value != 1u)
                 {
-                    return false;
+                    return;
                 }
 
                 state = Completed<>{};
-                return false;
             }
         };
 
@@ -111,26 +114,48 @@ namespace TaskSystem
 
         // Maybe: Should be a schedulable with concept
         template <typename TAwaitable>
-        void WhenAllForEach(WhenAllPromisePtr& promise, TAwaitable & awaitable)
+        void WhenAllForEach(WhenAllPromisePtr & promise, TAwaitable & awaitable)
         {
-            awaitable.ContinueWith(Continuation(*promise, CurrentScheduler()));
+            if constexpr (IsValueTask<TAwaitable>)
+            {
+                promise->DecrementCount();
+            }
+            else
+            {
+                auto result = awaitable.ContinueWith(Continuation(*promise, CurrentScheduler()));
 
-            // ToDo: check if awaitable needs scheduling
-            // if (awaitable.State() == TaskState::Created && awaitable::CanSchedule)
-            // {
-            //     awaitable.
-            // }
+                if (!result)
+                {
+                    promise->DecrementCount();
+                }
+                else
+                {
+                    // ToDo: check if awaitable needs scheduling
+                    if constexpr (TAwaitable::CanSchedule)
+                    {
+                        if (awaitable.State() == TaskState::Created)
+                        {
+                            auto* scheduler = FirstOf(awaitable.TaskScheduler(), DefaultScheduler(), CurrentScheduler());
+
+                            assert(scheduler);
+
+                            // Note: TrySetScheduled is called when cast to ScheduleItem
+                            scheduler->Schedule(awaitable);
+                        }
+                    }
+                }
+            }
         }
 
     }  // namespace Detail
 
     // Maybe: Should be a schedulable with concept
-    template <typename ... TAwaitables>
-    Detail::WhenAllAwaitable WhenAll(TAwaitables & ... awaitables)
+    template <typename... TAwaitables>
+    Detail::WhenAllAwaitable WhenAll(TAwaitables &&... awaitables)
     {
         auto promise = std::make_shared<Detail::WhenAllPromise>(sizeof...(TAwaitables));
 
-        (Detail::WhenAllForEach(promise, awaitables) , ...);
+        (Detail::WhenAllForEach(promise, awaitables), ...);
 
         return Detail::WhenAllAwaitable(std::move(promise));
     }

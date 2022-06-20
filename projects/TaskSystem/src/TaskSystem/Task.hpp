@@ -103,20 +103,7 @@ namespace TaskSystem
                 // }
 
                 // ToDo: should have a lock while accessing continuations?
-                for (auto & continuation : promise.Continuations())
-                {
-                    auto * scheduler = Detail::FirstOf(
-                        continuation.Scheduler(),
-                        promise.ContinuationScheduler(),
-                        DefaultScheduler(),
-                        CurrentScheduler());
-
-                    // Schedule continuation to run on different scheduler
-                    if (continuation.Promise().TrySetScheduled())
-                    {
-                        scheduler->Schedule(ScheduleItem(continuation.Promise()));
-                    }
-                }
+                promise.ScheduleContinuations();
 
                 // ToDo: Optimization for a promise on same scheduler use symetric transfer
                 // if (!scheduler || IsCurrentScheduler(scheduler))
@@ -223,7 +210,7 @@ namespace TaskSystem
 
         struct TaskPromisePolicy final
         {
-            static inline constexpr bool ScheduleContinuations = false;
+            static inline constexpr bool ScheduleContinuations = true;
             static inline constexpr bool CanSchedule = true;
             static inline constexpr bool CanRun = true;
             static inline constexpr bool CanSuspend = true;
@@ -387,6 +374,9 @@ namespace TaskSystem
                 }
             }
 
+            static constexpr bool CanSchedule = true;
+
+            // Maybe: just expose the promise instead?
             [[nodiscard]] operator ScheduleItem() const
             {
                 if (!handle)
@@ -394,9 +384,9 @@ namespace TaskSystem
                     throw std::exception("Invalid handle");
                 }
 
-                // ToDo: maybe add promise to ScheduleItem and call TrySetScheduled elsewhere
                 if (!handle.promise().TrySetScheduled())
                 {
+                    // Maybe: return empty ScheduleItem if fails?
                     throw std::exception("Unable to schedule task");
                 }
 
@@ -428,14 +418,16 @@ namespace TaskSystem
 
             void ScheduleOn(ITaskScheduler & taskScheduler) & { handle.promise().TaskScheduler(&taskScheduler); }
 
+            [[nodiscard]] ITaskScheduler * TaskScheduler() { return handle.promise().TaskScheduler(); }
+
             void ContinueOn(ITaskScheduler & taskScheduler) &
             {
                 handle.promise().ContinuationScheduler(&taskScheduler);
             }
 
-            void ContinueWith(Detail::Continuation && continuation)
+            AddContinuationResult ContinueWith(Detail::Continuation && continuation)
             {
-                handle.promise().TryAddContinuation(std::move(continuation));
+                return handle.promise().TryAddContinuation(std::move(continuation));
             }
 
         protected:

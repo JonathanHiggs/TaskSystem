@@ -113,9 +113,11 @@ namespace TaskSystem
             promise_type & promise;
 
         public:
+            explicit CompletionTaskBase(promise_type & promise) noexcept : promise(promise) { }
+
             ~CompletionTaskBase() noexcept override = default;
 
-            explicit CompletionTaskBase(promise_type & promise) noexcept : promise(promise) { }
+            static constexpr bool CanSchedule = false;
 
             auto operator co_await() const & noexcept { return TaskCompletionSourceAwaitable<TResult, false>(promise); }
             auto operator co_await() const && noexcept { return TaskCompletionSourceAwaitable<TResult, true>(promise); }
@@ -128,9 +130,9 @@ namespace TaskSystem
 
             void ContinueOn(ITaskScheduler & taskScheduler) & { promise.ContinuationScheduler(&taskScheduler); }
 
-            void ContinueWith(Detail::Continuation && continuation)
+            AddContinuationResult ContinueWith(Detail::Continuation && continuation)
             {
-                [[maybe_unused]] auto _ = promise.TryAddContinuation(std::move(continuation));
+                return promise.TryAddContinuation(std::move(continuation));
             }
 
         protected:

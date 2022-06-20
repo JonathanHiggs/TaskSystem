@@ -28,7 +28,7 @@ namespace TaskSystem
         ValueType value;
 
     public:
-        constexpr TaskState(ValueType value) : value(value) { }
+        constexpr TaskState(ValueType value) noexcept : value(value) { }
 
         [[nodiscard]] constexpr operator ValueType() const noexcept { return value; }
 

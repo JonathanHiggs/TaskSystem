@@ -9,6 +9,7 @@
 #include <TaskSystem/TaskState.hpp>
 
 #include <atomic>
+#include <cassert>
 #include <concepts>
 #include <exception>
 #include <mutex>
@@ -25,7 +26,7 @@ namespace TaskSystem::Detail
         // clang-format off
 
         // ToDo: find out why std::same_as<bool> does not work
-        { T::ScheduleContinuations } -> std::convertible_to<bool>;
+        { T::ScheduleContinuations } -> std::convertible_to<bool>;   // ToDo: remove, unused
         { T::CanSchedule } -> std::convertible_to<bool>;
         { T::CanRun } -> std::convertible_to<bool>;
         { T::CanSuspend } -> std::convertible_to<bool>;
@@ -94,23 +95,30 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] Detail::Continuations & Continuations() noexcept override final { return continuations; }
 
-        [[nodiscard]] bool TryAddContinuation(Detail::Continuation value) noexcept override final
+        [[nodiscard]] AddContinuationResult TryAddContinuation(Detail::Continuation value) noexcept override final
         {
             if (!value)
             {
-                return false;
+                return tl::make_unexpected(AddContinuationError(AddContinuationError::InvalidContinuation));
             }
 
             std::lock_guard lock(stateFlag);
 
             if (!StateIsOneOf<Created, Scheduled, Running, Suspended>())
             {
-                return false;
+                if (StateIsOneOf<Completed<TResult>>())
+                {
+                    return tl::make_unexpected(AddContinuationError(AddContinuationError::PromiseCompleted));
+                }
+                else if (StateIsOneOf<Faulted>())
+                {
+                    return tl::make_unexpected(AddContinuationError(AddContinuationError::PromiseFaulted));
+                }
             }
 
             continuations.Add(std::move(value));
 
-            return true;
+            return std::monostate{};
         }
 
         [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept override final
@@ -242,8 +250,7 @@ namespace TaskSystem::Detail
             completeFlag.wait(false, std::memory_order_acquire);
         }
 
-    protected:
-        inline void ScheduleContinuations() noexcept override final
+        void ScheduleContinuations() noexcept override final
         {
             if constexpr (policy_type::ScheduleContinuations)
             {
@@ -255,7 +262,7 @@ namespace TaskSystem::Detail
                         DefaultScheduler(),
                         CurrentScheduler());
 
-                    // ToDo: Assert scheduler
+                    assert(scheduler);
 
                     if (!continuation.Promise().TrySetScheduled())
                     {

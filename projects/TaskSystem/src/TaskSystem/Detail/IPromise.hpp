@@ -1,5 +1,6 @@
 #pragma once
 
+#include <TaskSystem/Detail/AddContinuationResult.hpp>
 #include <TaskSystem/Detail/Continuations.hpp>
 #include <TaskSystem/TaskState.hpp>
 
@@ -28,9 +29,12 @@ namespace TaskSystem::Detail
         [[nodiscard]] virtual std::coroutine_handle<> Handle() noexcept = 0;
 
         // Maybe: void Resume() ?
+        // if promises know how to run themselves it would collapse schedule item down and could have std::function
+        // and function pointer wrappers to make them accepted in places like WhenAll
 
         [[nodiscard]] virtual Detail::Continuations & Continuations() noexcept = 0;
-        [[nodiscard]] virtual bool TryAddContinuation(Detail::Continuation value) noexcept = 0;
+
+        [[nodiscard]] virtual AddContinuationResult TryAddContinuation(Detail::Continuation value) noexcept = 0;
 
         [[nodiscard]] virtual ITaskScheduler * ContinuationScheduler() const noexcept = 0;
         virtual void ContinuationScheduler(ITaskScheduler * value) noexcept = 0;
