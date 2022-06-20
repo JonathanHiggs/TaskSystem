@@ -26,7 +26,6 @@ namespace TaskSystem::Detail
         // clang-format off
 
         // ToDo: find out why std::same_as<bool> does not work
-        { T::ScheduleContinuations } -> std::convertible_to<bool>;   // ToDo: remove, unused
         { T::CanSchedule } -> std::convertible_to<bool>;
         { T::CanRun } -> std::convertible_to<bool>;
         { T::CanSuspend } -> std::convertible_to<bool>;
@@ -252,30 +251,27 @@ namespace TaskSystem::Detail
 
         void ScheduleContinuations() noexcept override final
         {
-            if constexpr (policy_type::ScheduleContinuations)
+            for (auto & continuation : this->continuations)
             {
-                for (auto & continuation : this->continuations)
+                auto * scheduler = FirstOf(
+                    continuation.Scheduler(),
+                    this->continuationScheduler,
+                    DefaultScheduler(),
+                    CurrentScheduler());
+
+                assert(scheduler);
+
+                if (!continuation.Promise().TrySetScheduled())
                 {
-                    auto * scheduler = FirstOf(
-                        continuation.Scheduler(),
-                        this->continuationScheduler,
-                        DefaultScheduler(),
-                        CurrentScheduler());
-
-                    assert(scheduler);
-
-                    if (!continuation.Promise().TrySetScheduled())
+                    if (continuation.Promise().State().IsCompleted())
                     {
-                        if (continuation.Promise().State().IsCompleted())
-                        {
-                            continuation.Promise().ScheduleContinuations();
-                        }
-
-                        continue;
+                        continuation.Promise().ScheduleContinuations();
                     }
 
-                    scheduler->Schedule(continuation.Promise());
+                    continue;
                 }
+
+                scheduler->Schedule(continuation.Promise());
             }
         }
     };

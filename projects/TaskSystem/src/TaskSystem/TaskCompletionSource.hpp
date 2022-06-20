@@ -24,7 +24,6 @@ namespace TaskSystem
 
         struct TaskCompletionSourcePromisePolicy final
         {
-            static inline constexpr bool ScheduleContinuations = true;
             static inline constexpr bool CanSchedule = false;
             static inline constexpr bool CanRun = false;
             static inline constexpr bool CanSuspend = false;

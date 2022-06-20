@@ -8,7 +8,6 @@ namespace TaskSystem::Detail::Tests
 
     struct RunnablePromisePolicy
     {
-        static inline constexpr bool ScheduleContinuations = false;
         static inline constexpr bool CanSchedule = true;
         static inline constexpr bool CanRun = true;
         static inline constexpr bool CanSuspend = true;
@@ -19,7 +18,6 @@ namespace TaskSystem::Detail::Tests
 
     struct NonRunnablePromisePolicy
     {
-        static inline constexpr bool ScheduleContinuations = false;
         static inline constexpr bool CanSchedule = false;
         static inline constexpr bool CanRun = false;
         static inline constexpr bool CanSuspend = false;

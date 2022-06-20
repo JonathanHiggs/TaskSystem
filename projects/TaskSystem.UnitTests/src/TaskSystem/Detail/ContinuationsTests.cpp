@@ -13,7 +13,6 @@ namespace TaskSystem::Detail::Tests
     {
         struct DummyPromisePolicy final
         {
-            static inline constexpr bool ScheduleContinuations = false;
             static inline constexpr bool CanSchedule = true;
             static inline constexpr bool CanRun = true;
             static inline constexpr bool CanSuspend = true;

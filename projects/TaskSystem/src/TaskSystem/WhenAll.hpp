@@ -16,7 +16,6 @@ namespace TaskSystem
 
         struct WhenAllPromisePolicy
         {
-            static inline constexpr bool ScheduleContinuations = true;
             static inline constexpr bool CanSchedule = true;
             static inline constexpr bool CanRun = true;
             static inline constexpr bool CanSuspend = true;
@@ -27,12 +26,11 @@ namespace TaskSystem
         {
         private:
             std::atomic_size_t count;
-            std::coroutine_handle<> resumeHandle;
 
         public:
             WhenAllPromise(size_t count) noexcept : count(count) { }
 
-            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return resumeHandle; }
+            [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
             // Only allow continuation to be scheduled when the counter ticks to zero
             [[nodiscard]] bool TrySetScheduled() noexcept override
@@ -48,11 +46,11 @@ namespace TaskSystem
                 return false;
             }
 
-            void DecrementCount() noexcept
+            void DecrementCount(size_t value = 1u) noexcept
             {
-                auto value = count.fetch_sub(1u, std::memory_order_release);
+                auto result = count.fetch_sub(value, std::memory_order_release);
 
-                if (value != 1u)
+                if (result != value)
                 {
                     return;
                 }
@@ -113,36 +111,38 @@ namespace TaskSystem
         };
 
         // Maybe: Should be a schedulable with concept
-        template <typename TAwaitable>
-        void WhenAllForEach(WhenAllPromisePtr & promise, TAwaitable & awaitable)
+        template <typename TSchedulable>
+        size_t WhenAllForEach(WhenAllPromisePtr & promise, TSchedulable & schedulable)
         {
-            if constexpr (IsValueTask<TAwaitable>)
+            if constexpr (IsValueTask<TSchedulable>)
             {
-                promise->DecrementCount();
+                return 1u;
             }
             else
             {
-                auto result = awaitable.ContinueWith(Continuation(*promise, CurrentScheduler()));
+                auto result = schedulable.ContinueWith(Continuation(*promise, CurrentScheduler()));
 
                 if (!result)
                 {
-                    promise->DecrementCount();
+                    return 1u;
                 }
                 else
                 {
-                    // ToDo: check if awaitable needs scheduling
-                    if constexpr (TAwaitable::CanSchedule)
+                    // ToDo: check if schedulable needs scheduling
+                    if constexpr (TSchedulable::CanSchedule)
                     {
-                        if (awaitable.State() == TaskState::Created)
+                        if (schedulable.State() == TaskState::Created)
                         {
-                            auto* scheduler = FirstOf(awaitable.TaskScheduler(), DefaultScheduler(), CurrentScheduler());
+                            auto* scheduler = FirstOf(schedulable.TaskScheduler(), DefaultScheduler(), CurrentScheduler());
 
                             assert(scheduler);
 
                             // Note: TrySetScheduled is called when cast to ScheduleItem
-                            scheduler->Schedule(awaitable);
+                            scheduler->Schedule(schedulable);
                         }
                     }
+
+                    return 0u;
                 }
             }
         }
@@ -150,12 +150,13 @@ namespace TaskSystem
     }  // namespace Detail
 
     // Maybe: Should be a schedulable with concept
-    template <typename... TAwaitables>
-    Detail::WhenAllAwaitable WhenAll(TAwaitables &&... awaitables)
+    template <typename... TSchedulables>
+    Detail::WhenAllAwaitable WhenAll(TSchedulables &&... schedulables)
     {
-        auto promise = std::make_shared<Detail::WhenAllPromise>(sizeof...(TAwaitables));
+        auto promise = std::make_shared<Detail::WhenAllPromise>(sizeof...(TSchedulables));
 
-        (Detail::WhenAllForEach(promise, awaitables), ...);
+        auto alreadyCompleted = (Detail::WhenAllForEach(promise, schedulables) + ...);
+        promise->DecrementCount(alreadyCompleted);
 
         return Detail::WhenAllAwaitable(std::move(promise));
     }

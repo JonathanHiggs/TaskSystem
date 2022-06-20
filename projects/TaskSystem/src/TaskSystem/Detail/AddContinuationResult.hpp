@@ -4,7 +4,10 @@
 
 #include <tl/expected.hpp>
 
+#include <array>
+#include <ostream>
 #include <string>
+#include <string_view>
 #include <variant>
 
 
@@ -40,16 +43,24 @@ namespace TaskSystem::Detail
             case PromiseCompleted:    return "PromiseCompleted";
             case PromiseFaulted:      return "PromiseFaulted";
             default:                  return "Unknown";
-            // clang-format on
+                // clang-format on
             }
         }
 
-        [[nodiscard]] constexpr std::string ToString() const noexcept
-        {
-            return std::string(ToStringView());
-        }
+        [[nodiscard]] constexpr std::string ToString() const noexcept { return std::string(ToStringView()); }
     };
+
+    static constexpr std::array<AddContinuationError, 3u> AddContinuationErrors{
+        AddContinuationError::InvalidContinuation,
+        AddContinuationError::PromiseCompleted,
+        AddContinuationError::PromiseFaulted
+    };
+
+    inline std::ostream& operator<<(std::ostream& os, AddContinuationError const value)
+    {
+        return os << value.ToStringView();
+    }
 
     using AddContinuationResult = tl::expected<std::monostate, AddContinuationError>;
 
-}
+}  // namespace TaskSystem::Detail
