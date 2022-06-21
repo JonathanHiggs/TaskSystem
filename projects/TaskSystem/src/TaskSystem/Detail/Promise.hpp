@@ -98,7 +98,7 @@ namespace TaskSystem::Detail
         {
             if (!value)
             {
-                return tl::make_unexpected(AddContinuationError(AddContinuationError::InvalidContinuation));
+                return AddContinuationError::InvalidContinuation;
             }
 
             std::lock_guard lock(stateFlag);
@@ -107,17 +107,17 @@ namespace TaskSystem::Detail
             {
                 if (StateIsOneOf<Completed<TResult>>())
                 {
-                    return tl::make_unexpected(AddContinuationError(AddContinuationError::PromiseCompleted));
+                    return AddContinuationError::PromiseCompleted;
                 }
                 else if (StateIsOneOf<Faulted>())
                 {
-                    return tl::make_unexpected(AddContinuationError(AddContinuationError::PromiseFaulted));
+                    return AddContinuationError::PromiseFaulted;
                 }
             }
 
             continuations.Add(std::move(value));
 
-            return std::monostate{};
+            return Success;
         }
 
         [[nodiscard]] ITaskScheduler * ContinuationScheduler() const noexcept override final

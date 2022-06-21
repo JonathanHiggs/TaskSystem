@@ -1,5 +1,7 @@
 #pragma once
 
+#include <TaskSystem/Detail/Enum.hpp>
+#include <TaskSystem/Detail/Result.hpp>
 #include <TaskSystem/TaskState.hpp>
 
 #include <tl/expected.hpp>
@@ -50,17 +52,19 @@ namespace TaskSystem::Detail
         [[nodiscard]] constexpr std::string ToString() const noexcept { return std::string(ToStringView()); }
     };
 
+    static_assert(Enum<AddContinuationError>);
+
     static constexpr std::array<AddContinuationError, 3u> AddContinuationErrors{
         AddContinuationError::InvalidContinuation,
         AddContinuationError::PromiseCompleted,
         AddContinuationError::PromiseFaulted
     };
 
-    inline std::ostream& operator<<(std::ostream& os, AddContinuationError const value)
+    inline std::ostream & operator<<(std::ostream & os, AddContinuationError const value)
     {
         return os << value.ToStringView();
     }
 
-    using AddContinuationResult = tl::expected<std::monostate, AddContinuationError>;
+    using AddContinuationResult = Result<AddContinuationError>;
 
 }  // namespace TaskSystem::Detail
