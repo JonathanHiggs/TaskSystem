@@ -113,6 +113,8 @@ namespace TaskSystem::Detail
                 {
                     return AddContinuationError::PromiseFaulted;
                 }
+
+                std::terminate();
             }
 
             continuations.Add(std::move(value));
@@ -127,12 +129,12 @@ namespace TaskSystem::Detail
 
         void ContinuationScheduler(ITaskScheduler * value) noexcept override final { continuationScheduler = value; }
 
-        [[nodiscard]] bool TrySetScheduled() noexcept override
+        [[nodiscard]] SetScheduledResult TrySetScheduled() noexcept override
         {
             // Maybe: two separate versions, one is constexpr
             if constexpr (!policy_type::CanSchedule)
             {
-                return false;
+                return SetScheduledError::CannotSchedule;
             }
             else
             {
@@ -140,11 +142,24 @@ namespace TaskSystem::Detail
 
                 if (!StateIsOneOf<Created, Suspended>())
                 {
-                    return false;
+                    if (StateIsOneOf<Running>())
+                    {
+                        return SetScheduledError::PromiseRunning;
+                    }
+                    else if (StateIsOneOf<Completed<TResult>>())
+                    {
+                        return SetScheduledError::PromiseCompleted;
+                    }
+                    else if (StateIsOneOf<Faulted>())
+                    {
+                        return SetScheduledError::PromiseFaulted;
+                    }
+
+                    return SetScheduledError::AlreadyScheduled;
                 }
 
                 state = Scheduled{};
-                return true;
+                return Success;
             }
         }
 
@@ -261,17 +276,18 @@ namespace TaskSystem::Detail
 
                 assert(scheduler);
 
-                if (!continuation.Promise().TrySetScheduled())
+                auto result = continuation.Promise().TrySetScheduled();
+                if (result)
                 {
-                    if (continuation.Promise().State().IsCompleted())
+                    scheduler->Schedule(continuation.Promise());
+                }
+                else
+                {
+                    if (result == SetScheduledError::PromiseCompleted || result == SetScheduledError::PromiseFaulted)
                     {
                         continuation.Promise().ScheduleContinuations();
                     }
-
-                    continue;
                 }
-
-                scheduler->Schedule(continuation.Promise());
             }
         }
     };

@@ -2,6 +2,11 @@
 
 #include <TaskSystem/Detail/AddContinuationResult.hpp>
 #include <TaskSystem/Detail/Continuations.hpp>
+//#include <TaskSystem/Detail/SetCompletedResult.hpp>
+//#include <TaskSystem/Detail/SetFaultedResult.hpp>
+//#include <TaskSystem/Detail/SetRunningResult.hpp>
+#include <TaskSystem/Detail/SetScheduledResult.hpp>
+//#include <TaskSystem/Detail/SetSuspendedResult.hpp>
 #include <TaskSystem/TaskState.hpp>
 
 #include <exception>
@@ -42,7 +47,7 @@ namespace TaskSystem::Detail
         [[nodiscard]] virtual ITaskScheduler * TaskScheduler() const noexcept { return nullptr; }
         virtual void TaskScheduler(ITaskScheduler * value) noexcept { }
 
-        [[nodiscard]] virtual bool TrySetScheduled() noexcept = 0;
+        [[nodiscard]] virtual SetScheduledResult TrySetScheduled() noexcept = 0;
 
         [[nodiscard]] virtual bool TrySetRunning() noexcept = 0;
         // Maybe: Move to PromisePolicy::AllowSetRunningWhenRunning

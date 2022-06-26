@@ -32,18 +32,30 @@ namespace TaskSystem
 
             [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
-            // Only allow continuation to be scheduled when the counter ticks to zero
-            [[nodiscard]] bool TrySetScheduled() noexcept override
+            [[nodiscard]] SetScheduledResult TrySetScheduled() noexcept override
             {
                 std::lock_guard lock(stateFlag);
 
                 if (!StateIsOneOf<Created, Suspended>())
                 {
-                    return false;
+                    if (StateIsOneOf<Running>())
+                    {
+                        return SetScheduledError::PromiseRunning;
+                    }
+                    else if (StateIsOneOf<Completed<void>>())
+                    {
+                        return SetScheduledError::PromiseCompleted;
+                    }
+                    else if (StateIsOneOf<Faulted>())
+                    {
+                        return SetScheduledError::PromiseFaulted;
+                    }
+
+                    return SetScheduledError::AlreadyScheduled;
                 }
 
                 DecrementCount();
-                return false;
+                return SetScheduledError::CannotSchedule;
             }
 
             void DecrementCount(size_t value = 1u) noexcept
