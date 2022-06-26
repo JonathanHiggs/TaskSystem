@@ -38,4 +38,91 @@ namespace TaskSystem::Detail
         [[nodiscard]] TErrorReason operator*() const noexcept { return *reason; }
     };
 
+
+    template <typename TErrorReason>
+    constexpr bool operator==(Result<TErrorReason> const & lhs, bool rhs)
+    {
+        return static_cast<bool>(lhs) == rhs;
+    }
+
+    template <typename TErrorReason>
+    [[nodiscard]] constexpr inline bool operator!=(Result<TErrorReason> const & lhs, bool rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename TErrorReason>
+    constexpr bool operator==(bool lhs, Result<TErrorReason> const & rhs)
+    {
+        return rhs == lhs;
+    }
+
+    template <typename TErrorReason>
+    [[nodiscard]] constexpr inline bool operator!=(bool lhs, Result<TErrorReason> const & rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+
+    template <typename TErrorReason>
+    constexpr bool operator==(Result<TErrorReason> const & lhs, TErrorReason const & rhs)
+    {
+        return !lhs && *lhs == rhs;
+    }
+
+    template <typename TErrorReason>
+    [[nodiscard]] constexpr inline bool operator!=(Result<TErrorReason> const & lhs, TErrorReason const & rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename TErrorReason>
+    constexpr bool operator==(TErrorReason const & lhs, Result<TErrorReason> const & rhs)
+    {
+        return rhs == lhs;
+    }
+
+    template <typename TErrorReason>
+    [[nodiscard]] constexpr inline bool operator!=(TErrorReason const & lhs, Result<TErrorReason> const & rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+
+    template <
+        typename TErrorReason,
+        typename TValueType = TErrorReason::ValueType,
+        std::enable_if_t<IsEnum<TErrorReason>> * = nullptr>
+    constexpr bool operator==(Result<TErrorReason> const & lhs, TValueType rhs)
+    {
+        return !lhs && *lhs == TErrorReason(rhs);
+    }
+
+    template <
+        typename TErrorReason,
+        typename TValueType = TErrorReason::ValueType,
+        std::enable_if_t<IsEnum<TErrorReason>> * = nullptr>
+    [[nodiscard]] constexpr inline bool operator!=(Result<TErrorReason> const & lhs, TValueType rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    template <
+        typename TErrorReason,
+        typename TValueType = TErrorReason::ValueType,
+        std::enable_if_t<IsEnum<TErrorReason>> * = nullptr>
+    constexpr bool operator==(TValueType lhs, Result<TErrorReason> const & rhs)
+    {
+        return rhs == lhs;
+    }
+
+    template <
+        typename TErrorReason,
+        typename TValueType = TErrorReason::ValueType,
+        std::enable_if_t<IsEnum<TErrorReason>> * = nullptr>
+    [[nodiscard]] constexpr inline bool operator!=(TValueType lhs, Result<TErrorReason> const & rhs)
+    {
+        return !(lhs == rhs);
+    }
+
 }  // namespace TaskSystem::Detail

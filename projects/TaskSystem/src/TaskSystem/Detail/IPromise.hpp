@@ -4,7 +4,7 @@
 #include <TaskSystem/Detail/Continuations.hpp>
 //#include <TaskSystem/Detail/SetCompletedResult.hpp>
 //#include <TaskSystem/Detail/SetFaultedResult.hpp>
-//#include <TaskSystem/Detail/SetRunningResult.hpp>
+#include <TaskSystem/Detail/SetRunningResult.hpp>
 #include <TaskSystem/Detail/SetScheduledResult.hpp>
 //#include <TaskSystem/Detail/SetSuspendedResult.hpp>
 #include <TaskSystem/TaskState.hpp>
@@ -17,12 +17,6 @@ class TaskSystem::ITaskScheduler;
 
 namespace TaskSystem::Detail
 {
-
-    struct IgnoreAlreadySetTag
-    {
-    };
-
-    constexpr IgnoreAlreadySetTag IgnoreAlreadySet{};
 
     class IPromise
     {
@@ -49,9 +43,7 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] virtual SetScheduledResult TrySetScheduled() noexcept = 0;
 
-        [[nodiscard]] virtual bool TrySetRunning() noexcept = 0;
-        // Maybe: Move to PromisePolicy::AllowSetRunningWhenRunning
-        [[nodiscard]] virtual bool TrySetRunning(IgnoreAlreadySetTag) noexcept = 0;
+        [[nodiscard]] virtual SetRunningResult TrySetRunning() noexcept = 0;
 
         [[nodiscard]] virtual bool TrySetSuspended() noexcept = 0;
 

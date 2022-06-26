@@ -163,11 +163,11 @@ namespace TaskSystem::Detail
             }
         }
 
-        [[nodiscard]] bool TrySetRunning() noexcept override final
+        [[nodiscard]] SetRunningResult TrySetRunning() noexcept override final
         {
             if constexpr (!policy_type::CanRun)
             {
-                return false;
+                return SetRunningError::CannotRun;
             }
             else
             {
@@ -175,36 +175,20 @@ namespace TaskSystem::Detail
 
                 if (!StateIsOneOf<Created, Scheduled, Suspended>())
                 {
-                    return false;
+                    if (StateIsOneOf<Completed<TResult>>())
+                    {
+                        return SetRunningError::PromiseCompleted;
+                    }
+                    if (StateIsOneOf<Faulted>())
+                    {
+                        return SetRunningError::PromiseFaulted;
+                    }
+
+                    return SetRunningError::AlreadyRunning;
                 }
 
                 state = Running{};
-                return true;
-            }
-        }
-
-        [[nodiscard]] bool TrySetRunning(IgnoreAlreadySetTag) noexcept override final
-        {
-            if constexpr (!policy_type::CanRun)
-            {
-                return false;
-            }
-            else
-            {
-                std::lock_guard lock(stateFlag);
-
-                if (StateIsOneOf<Running>())
-                {
-                    return true;
-                }
-
-                if (!StateIsOneOf<Created, Scheduled, Suspended>())
-                {
-                    return false;
-                }
-
-                state = Running{};
-                return true;
+                return Success;
             }
         }
 

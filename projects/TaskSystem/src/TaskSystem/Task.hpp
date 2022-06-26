@@ -71,10 +71,11 @@ namespace TaskSystem
 
             void await_resume() const
             {
-                if (!promise.TrySetRunning(IgnoreAlreadySet))
-                {
-                    throw std::exception();
-                }
+                // auto result = promise.TrySetRunning();
+                // if (!result || result != Detail::SetRunningError::AlreadyRunning)
+                // {
+                //     throw std::exception();
+                // }
             }
         };
 
@@ -96,22 +97,7 @@ namespace TaskSystem
 
             std::coroutine_handle<> await_suspend(std::coroutine_handle<>) const noexcept
             {
-                // Maybe: possible optimization - avoid schedule and rethrow
-                // if (promise.State() == TaskState::Error)
-                // {
-                //     continuation.SetError(promise.ExceptionPtr());
-                // }
-
-                // ToDo: should have a lock while accessing continuations?
                 promise.ScheduleContinuations();
-
-                // ToDo: Optimization for a promise on same scheduler use symetric transfer
-                // if (!scheduler || IsCurrentScheduler(scheduler))
-                // {
-                //     [[maybe_unused]] auto _ = continuation.Promise().TrySetRunning();
-                //     return continuation.Handle();
-                // }
-
                 return std::noop_coroutine();
             }
 
@@ -165,7 +151,7 @@ namespace TaskSystem
                 {
                     if (handle.promise().TrySetScheduled())
                     {
-                        scheduler->Schedule(ScheduleItem(std::coroutine_handle<>(handle)));
+                        scheduler->Schedule((ScheduleItem)handle.promise());
                     }
                     return std::noop_coroutine();
                 }

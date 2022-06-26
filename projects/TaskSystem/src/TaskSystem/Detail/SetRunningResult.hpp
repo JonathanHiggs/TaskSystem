@@ -19,6 +19,10 @@ namespace TaskSystem::Detail
     public:
         enum ValueType
         {
+            CannotRun,
+            AlreadyRunning,
+            PromiseCompleted,
+            PromiseFaulted
         };
 
     private:
@@ -27,6 +31,8 @@ namespace TaskSystem::Detail
     public:
         constexpr SetRunningError(ValueType value) noexcept : value(value) { }
 
+        operator bool() const noexcept = delete;
+
         [[nodiscard]] constexpr operator ValueType() const noexcept { return value; }
 
         [[nodiscard]] constexpr std::string_view ToStringView() const noexcept
@@ -34,6 +40,11 @@ namespace TaskSystem::Detail
             switch (value)
             {
             // clang-format off
+            case CannotRun:         return "CannotRun";
+            case AlreadyRunning:    return "AlreadyRunning";
+            case PromiseCompleted:  return "PromiseCompleted";
+            case PromiseFaulted:    return "PromiseFaulted";
+            default:                return "Unknown";
             // clang-format on
             }
         }
