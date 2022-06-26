@@ -6,7 +6,7 @@
 //#include <TaskSystem/Detail/SetFaultedResult.hpp>
 #include <TaskSystem/Detail/SetRunningResult.hpp>
 #include <TaskSystem/Detail/SetScheduledResult.hpp>
-//#include <TaskSystem/Detail/SetSuspendedResult.hpp>
+#include <TaskSystem/Detail/SetSuspendedResult.hpp>
 #include <TaskSystem/TaskState.hpp>
 
 #include <exception>
@@ -45,7 +45,7 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] virtual SetRunningResult TrySetRunning() noexcept = 0;
 
-        [[nodiscard]] virtual bool TrySetSuspended() noexcept = 0;
+        [[nodiscard]] virtual SetSuspendedResult TrySetSuspended() noexcept = 0;
 
         // ToDo: TrySetCancelled;
 

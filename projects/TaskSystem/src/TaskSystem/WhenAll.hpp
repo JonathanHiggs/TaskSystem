@@ -54,20 +54,21 @@ namespace TaskSystem
                     return SetScheduledError::AlreadyScheduled;
                 }
 
-                DecrementCount();
-                return SetScheduledError::CannotSchedule;
+                // ToDo: add OnSetScheduled() to Promise
+                return DecrementCount();
             }
 
-            void DecrementCount(size_t value = 1u) noexcept
+            SetScheduledResult DecrementCount(size_t value = 1u) noexcept
             {
                 auto result = count.fetch_sub(value, std::memory_order_release);
 
                 if (result != value)
                 {
-                    return;
+                    return SetScheduledError::CannotSchedule;
                 }
 
                 state = Completed<>{};
+                return SetScheduledError::PromiseCompleted;
             }
         };
 

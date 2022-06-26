@@ -19,6 +19,12 @@ namespace TaskSystem::Detail
     public:
         enum ValueType
         {
+            CannotSuspend,
+            AlreadySuspended,
+            PromiseCreated,
+            PromiseScheduled,
+            PromiseCompleted,
+            PromiseFaulted
         };
 
     private:
@@ -34,6 +40,13 @@ namespace TaskSystem::Detail
             switch (value)
             {
             // clang-format off
+            case CannotSuspend:     return "CannotSuspend";
+            case AlreadySuspended:  return "AlreadySuspended";
+            case PromiseCreated:    return "PromiseCreated";
+            case PromiseScheduled:  return "PromiseScheduled";
+            case PromiseCompleted:  return "PromiseCompleted";
+            case PromiseFaulted:    return "PromiseFaulted";
+            default:                return "Unknown";
             // clang-format on
             }
         }

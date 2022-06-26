@@ -192,11 +192,11 @@ namespace TaskSystem::Detail
             }
         }
 
-        [[nodiscard]] bool TrySetSuspended() noexcept override final
+        [[nodiscard]] SetSuspendedResult TrySetSuspended() noexcept override final
         {
             if constexpr (!policy_type::CanSuspend)
             {
-                return false;
+                return SetSuspendedError::CannotSuspend;
             }
             else
             {
@@ -206,19 +206,49 @@ namespace TaskSystem::Detail
                 {
                     if (!StateIsOneOf<Created, Running>())
                     {
-                        return false;
+                        if (StateIsOneOf<Scheduled>())
+                        {
+                            return SetSuspendedError::PromiseScheduled;
+                        }
+                        if (StateIsOneOf<Completed<TResult>>())
+                        {
+                            return SetSuspendedError::PromiseCompleted;
+                        }
+                        if (StateIsOneOf<Faulted>())
+                        {
+                            return SetSuspendedError::PromiseFaulted;
+                        }
+
+                        return SetSuspendedError::AlreadySuspended;
                     }
                 }
                 else
                 {
                     if (!StateIsOneOf<Running>())
                     {
-                        return false;
+                        if (StateIsOneOf<Created>())
+                        {
+                            return SetSuspendedError::PromiseCreated;
+                        }
+                        if (StateIsOneOf<Scheduled>())
+                        {
+                            return SetSuspendedError::PromiseScheduled;
+                        }
+                        if (StateIsOneOf<Completed<TResult>>())
+                        {
+                            return SetSuspendedError::PromiseCompleted;
+                        }
+                        if (StateIsOneOf<Faulted>())
+                        {
+                            return SetSuspendedError::PromiseFaulted;
+                        }
+
+                        return SetSuspendedError::AlreadySuspended;
                     }
                 }
 
                 state = Suspended{};
-                return true;
+                return Success;
             }
         }
 
