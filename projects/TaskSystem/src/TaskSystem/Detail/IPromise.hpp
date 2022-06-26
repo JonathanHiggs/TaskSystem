@@ -2,8 +2,7 @@
 
 #include <TaskSystem/Detail/AddContinuationResult.hpp>
 #include <TaskSystem/Detail/Continuations.hpp>
-//#include <TaskSystem/Detail/SetCompletedResult.hpp>
-//#include <TaskSystem/Detail/SetFaultedResult.hpp>
+#include <TaskSystem/Detail/SetFaultedResult.hpp>
 #include <TaskSystem/Detail/SetRunningResult.hpp>
 #include <TaskSystem/Detail/SetScheduledResult.hpp>
 #include <TaskSystem/Detail/SetSuspendedResult.hpp>
@@ -49,7 +48,7 @@ namespace TaskSystem::Detail
 
         // ToDo: TrySetCancelled;
 
-        [[nodiscard]] virtual bool TrySetException(std::exception_ptr ex) noexcept = 0;
+        [[nodiscard]] virtual SetFaultedResult TrySetException(std::exception_ptr ex) noexcept = 0;
 
         virtual void Wait() const noexcept = 0;
 

@@ -29,6 +29,8 @@ namespace TaskSystem::Detail
     public:
         constexpr AddContinuationError(ValueType value) noexcept : value(value) { }
 
+        operator bool() const noexcept = delete;
+
         [[nodiscard]] constexpr operator ValueType() const noexcept { return value; }
 
         [[nodiscard]] constexpr std::string_view ToStringView() const noexcept

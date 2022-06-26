@@ -3,6 +3,7 @@
 #include <TaskSystem/AtomicLockGuard.hpp>
 #include <TaskSystem/Detail/Continuation.hpp>
 #include <TaskSystem/Detail/IPromise.hpp>
+#include <TaskSystem/Detail/SetCompletedResult.hpp>
 #include <TaskSystem/Detail/TaskStates.hpp>
 #include <TaskSystem/Detail/Utils.hpp>
 #include <TaskSystem/ITaskScheduler.hpp>
@@ -252,14 +253,23 @@ namespace TaskSystem::Detail
             }
         }
 
-        [[nodiscard]] bool TrySetException(std::exception_ptr ex) noexcept override final
+        [[nodiscard]] SetFaultedResult TrySetException(std::exception_ptr ex) noexcept override final
         {
             {
                 std::lock_guard lock(stateFlag);
 
                 if (!StateIsOneOf<Created, Running, Suspended>())
                 {
-                    return false;
+                    if (StateIsOneOf<Scheduled>())
+                    {
+                        return SetFaultedError::PromiseScheduled;
+                    }
+                    if (StateIsOneOf<Completed<TResult>>())
+                    {
+                        return SetFaultedError::PromiseCompleted;
+                    }
+
+                    return SetFaultedError::AlreadyFaulted;
                 }
 
                 state = Faulted{ ex };
@@ -269,7 +279,7 @@ namespace TaskSystem::Detail
             completeFlag.test_and_set(std::memory_order_acquire);
             completeFlag.notify_all();
 
-            return true;
+            return Success;
         }
 
         void Wait() const noexcept override final
@@ -314,14 +324,23 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
-        [[nodiscard]] bool TrySetResult(std::convertible_to<TResult> auto && value) noexcept
+        [[nodiscard]] SetCompletedResult TrySetResult(std::convertible_to<TResult> auto && value) noexcept
         {
             {
                 std::lock_guard lock(this->stateFlag);
 
                 if (!this->StateIsOneOf<Created, Running, Suspended>())
                 {
-                    return false;
+                    if (this->StateIsOneOf<Scheduled>())
+                    {
+                        return SetCompletedError::PromiseScheduled;
+                    }
+                    if (this->StateIsOneOf<Faulted>())
+                    {
+                        return SetCompletedError::PromiseFaulted;
+                    }
+
+                    return SetCompletedError::AlreadyCompleted;
                 }
 
                 if constexpr (std::is_nothrow_constructible_v<TResult, decltype(value)>)
@@ -346,7 +365,7 @@ namespace TaskSystem::Detail
             this->completeFlag.test_and_set(std::memory_order_acquire);
             this->completeFlag.notify_all();
 
-            return true;
+            return Success;
         }
 
         [[nodiscard]] TResult & Result() &
@@ -422,14 +441,23 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
-        [[nodiscard]] bool TrySetResult(TResult & value) noexcept
+        [[nodiscard]] SetCompletedResult TrySetResult(TResult & value) noexcept
         {
             {
                 std::lock_guard lock(this->stateFlag);
 
                 if (!this->StateIsOneOf<Created, Running, Suspended>())
                 {
-                    return false;
+                    if (this->StateIsOneOf<Scheduled>())
+                    {
+                        return SetCompletedError::PromiseScheduled;
+                    }
+                    if (this->StateIsOneOf<Faulted>())
+                    {
+                        return SetCompletedError::PromiseFaulted;
+                    }
+
+                    return SetCompletedError::AlreadyCompleted;
                 }
 
                 this->state = Completed<TResult *>{ std::addressof(value) };
@@ -439,7 +467,7 @@ namespace TaskSystem::Detail
             this->completeFlag.test_and_set(std::memory_order_acquire);
             this->completeFlag.notify_all();
 
-            return true;
+            return Success;
         }
 
         [[nodiscard]] TResult & Result()
@@ -483,14 +511,23 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] std::coroutine_handle<> Handle() noexcept override { return std::noop_coroutine(); }
 
-        [[nodiscard]] bool TrySetCompleted() noexcept
+        [[nodiscard]] SetCompletedResult TrySetCompleted() noexcept
         {
             {
                 std::lock_guard lock(this->stateFlag);
 
                 if (!this->StateIsOneOf<Created, Running, Suspended>())
                 {
-                    return false;
+                    if (this->StateIsOneOf<Scheduled>())
+                    {
+                        return SetCompletedError::PromiseScheduled;
+                    }
+                    if (this->StateIsOneOf<Faulted>())
+                    {
+                        return SetCompletedError::PromiseFaulted;
+                    }
+
+                    return SetCompletedError::AlreadyCompleted;
                 }
 
                 this->state = Completed<>{};
@@ -500,7 +537,7 @@ namespace TaskSystem::Detail
             this->completeFlag.test_and_set(std::memory_order_acquire);
             this->completeFlag.notify_all();
 
-            return true;
+            return Success;
         }
 
         [[nodiscard]] void ThrowIfFaulted() const

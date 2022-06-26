@@ -19,6 +19,9 @@ namespace TaskSystem::Detail
     public:
         enum ValueType
         {
+            AlreadyCompleted,
+            PromiseScheduled,
+            PromiseFaulted,
         };
 
     private:
@@ -27,6 +30,8 @@ namespace TaskSystem::Detail
     public:
         constexpr SetCompletedError(ValueType value) noexcept : value(value) { }
 
+        operator bool() const noexcept = delete;
+
         [[nodiscard]] constexpr operator ValueType() const noexcept { return value; }
 
         [[nodiscard]] constexpr std::string_view ToStringView() const noexcept
@@ -34,6 +39,10 @@ namespace TaskSystem::Detail
             switch (value)
             {
             // clang-format off
+            case AlreadyCompleted: return "AlreadyCompleted";
+            case PromiseScheduled: return "PromiseScheduled";
+            case PromiseFaulted:   return "PromiseFaulted";
+            default:               return "Unknown";
             // clang-format on
             }
         }

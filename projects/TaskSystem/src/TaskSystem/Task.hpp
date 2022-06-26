@@ -291,9 +291,7 @@ namespace TaskSystem
 
             void return_void() noexcept
             {
-                if (!this->TrySetCompleted())
-                {
-                }
+                [[maybe_unused]] auto _ = this->TrySetCompleted();
             }
         };
 
