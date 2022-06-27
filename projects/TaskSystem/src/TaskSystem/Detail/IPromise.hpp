@@ -34,6 +34,9 @@ namespace TaskSystem::Detail
 
         [[nodiscard]] virtual AddContinuationResult TryAddContinuation(Detail::Continuation value) noexcept = 0;
 
+        // ToDo:
+        // [[nodiscard]] virtual RemoveContinuationResult TryRemoveContinuation(Detail::Continuation value) noexcept = 0;
+
         [[nodiscard]] virtual ITaskScheduler * ContinuationScheduler() const noexcept = 0;
         virtual void ContinuationScheduler(ITaskScheduler * value) noexcept = 0;
 

@@ -62,7 +62,7 @@ namespace TaskSystem
             {
                 auto result = count.fetch_sub(value, std::memory_order_release);
 
-                if (result != value)
+                if (result - value != 0)
                 {
                     return SetScheduledError::CannotSchedule;
                 }
@@ -82,7 +82,7 @@ namespace TaskSystem
         public:
             WhenAllAwaitable(WhenAllPromisePtr promise) noexcept : promise(std::move(promise))
             {
-                // ToDo: assert promise != nullptr
+                assert(this->promise != nullptr);
             }
 
             constexpr bool await_ready() const noexcept { return false; }
@@ -123,8 +123,8 @@ namespace TaskSystem
             constexpr void await_resume() const noexcept { }
         };
 
-        // Maybe: Should be a schedulable with concept
-        template <typename TSchedulable>
+        // Returns 1 if the schedulable is already complete; otherwise 0
+        template <typename TSchedulable>  // Maybe: Should be a schedulable with concept
         size_t WhenAllForEach(WhenAllPromisePtr & promise, TSchedulable & schedulable)
         {
             if constexpr (IsValueTask<TSchedulable>)
@@ -137,7 +137,10 @@ namespace TaskSystem
 
                 if (!result)
                 {
-                    return 1u;
+                    return result == AddContinuationError::PromiseCompleted
+                        || result == AddContinuationError::PromiseFaulted
+                        ? 1u
+                        : 0u;
                 }
                 else
                 {
@@ -146,7 +149,8 @@ namespace TaskSystem
                     {
                         if (schedulable.State() == TaskState::Created)
                         {
-                            auto* scheduler = FirstOf(schedulable.TaskScheduler(), DefaultScheduler(), CurrentScheduler());
+                            auto * scheduler
+                                = FirstOf(schedulable.TaskScheduler(), DefaultScheduler(), CurrentScheduler());
 
                             assert(scheduler);
 
