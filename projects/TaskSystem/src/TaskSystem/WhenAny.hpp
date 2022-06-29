@@ -185,7 +185,7 @@ namespace TaskSystem
     template <typename... TSchedulables>
     Detail::WhenAnyAwaitable WhenAny(TSchedulables &&... schedulables)
     {
-        auto promise = std::make_shared<Detail::WhenAnyPromise>();
+        auto promise = std::make_shared<Detail::WhenAnyPromise>(sizeof...(TSchedulables));
 
         auto alreadyCompleted = (Detail::WhenAnyForEach(promise, schedulables) + ...);
         if (alreadyCompleted > 0u)

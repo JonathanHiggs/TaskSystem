@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="TaskSystem::TaskState">
+        <DisplayString>{value}</DisplayString>
+    </Type>
+    <Type Name="TaskSystem::Detail::Continuations">
+        <DisplayString>{{ size={arrCount + vec.size()} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]" ExcludeView="simple">arrCount + vec.size()</Item>
+            <Item Name="[capacity]" ExcludeView="simple">arr.size() + vec.size()</Item>
+        </Expand>
+    </Type>
+    <Type Name="TaskSystem::Detail::PromiseBase&lt;*&gt;">
+        <DisplayString>{{ state={State()} }}</DisplayString>
+        <Expand>
+            <Item Name="[state]">State()</Item>
+            <Item Name="[stateFlag]">stateFlag</Item>
+            <Item Name="[completeFlag]">completeFlag</Item>
+            <Item Name="[continuations]">continuations</Item>
+            <Item Name="[continuationScheduler]">continuationScheduler</Item>
+        </Expand>
+    </Type>
+    <Type Name="TaskSystem::Detail::CompletionTaskBase&lt;*&gt;">
+        <DisplayString>{{ state={State()} }</DisplayString>
+        <Expand>
+            <Item Name="[promise]">promise</Item>
+        </Expand>
+    </Type>
+    <Type Name="TaskSystem::Detail::TaskBase&lt;*&gt;">
+        <DisplayString>{{ state={State()} }</DisplayString>
+        <Expand>
+            <Item Name="[handle]">handle</Item>
+            <Item Name="[promise]">handle.promise()</Item>
+        </Expand>
+    </Type>
+    <Type Name="TaskSystem::ValueTask&lt;*&gt;">
+        <DisplayString>{{ state={State()} }}</DisplayString>
+        <Expand>
+            <Item Name="[result]">result</Item>
+        </Expand>
+    </Type>
+</AutoVisualizer>
